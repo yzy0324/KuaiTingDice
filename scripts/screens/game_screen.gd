@@ -56,6 +56,8 @@ var audio_manager: Node
 var network_manager: Node
 var lan_snapshot: Dictionary = {}
 var lan_snapshot_connected: bool = false
+var lan_connection_lost: bool = false
+var lan_connection_lost_message: String = ""
 
 
 func _ready() -> void:
@@ -402,6 +404,8 @@ func start_lan_multiplayer_game(manager: Node) -> void:
 	game_mode = "lan_multiplayer"
 	network_manager = manager
 	lan_snapshot = {}
+	lan_connection_lost = false
+	lan_connection_lost_message = ""
 	is_animating = false
 	result_emitted = false
 	if network_manager and not lan_snapshot_connected:
@@ -410,6 +414,16 @@ func start_lan_multiplayer_game(manager: Node) -> void:
 	_refresh_ui()
 	if network_manager and network_manager.has_method("request_lan_state_snapshot"):
 		network_manager.call("request_lan_state_snapshot")
+
+
+func handle_lan_connection_lost(message: String) -> void:
+	if game_mode != "lan_multiplayer":
+		return
+	lan_connection_lost = true
+	lan_connection_lost_message = message
+	is_animating = false
+	rolling_indices.clear()
+	_refresh_ui()
 
 
 func _on_roll_pressed() -> void:
@@ -749,6 +763,18 @@ func _refresh_lan_ui() -> void:
 		local_score_panel.visible = true
 
 	title_label.text = "LAN Multiplayer"
+	if lan_connection_lost:
+		info_label.text = lan_connection_lost_message
+		rolls_left_label.text = "Connection lost. Returning to LAN Lobby."
+		roll_button.text = "ROLL"
+		roll_button.disabled = true
+		for i in range(DICE_COUNT):
+			dice_buttons[i].disabled = true
+		_refresh_lan_score_table()
+		game_over_label.visible = true
+		game_over_label.text = "Connection lost. Returning to LAN Lobby."
+		return
+
 	if lan_snapshot.is_empty():
 		info_label.text = "Waiting for host snapshot..."
 		rolls_left_label.text = "Connected LAN match"
@@ -783,6 +809,9 @@ func _refresh_lan_ui() -> void:
 	var dice_values: Array = active_player.get("dice_values", [1, 1, 1, 1, 1])
 	var held_values: Array = active_player.get("held", [false, false, false, false, false])
 	for i in range(DICE_COUNT):
+		if i >= dice_values.size() or i >= held_values.size():
+			dice_buttons[i].disabled = true
+			continue
 		var held: bool = bool(held_values[i])
 		_update_die_visual(i, int(dice_values[i]), held)
 		dice_buttons[i].disabled = is_animating or (not local_can_act) or int(active_player.get("rolls_used", 0)) == 0
@@ -875,7 +904,7 @@ func _get_lan_local_player_number() -> int:
 
 
 func _can_lan_local_act() -> bool:
-	if is_animating or network_manager == null or lan_snapshot.is_empty():
+	if lan_connection_lost or is_animating or network_manager == null or lan_snapshot.is_empty():
 		return false
 	if bool(lan_snapshot.get("match_over", false)):
 		return false

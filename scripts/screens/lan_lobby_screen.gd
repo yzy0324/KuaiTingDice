@@ -51,6 +51,8 @@ func set_network_manager(manager: Node) -> void:
 		network_manager.connect("ready_state_changed", Callable(self, "_on_ready_state_changed"))
 	if network_manager.has_signal("lan_match_start_requested"):
 		network_manager.connect("lan_match_start_requested", Callable(self, "_on_lan_match_start_requested"))
+	if network_manager.has_signal("lan_connection_lost"):
+		network_manager.connect("lan_connection_lost", Callable(self, "_on_lan_connection_lost"))
 
 
 func _build_ui() -> void:
@@ -239,6 +241,14 @@ func _on_ready_state_changed(_local_ready: bool, _remote_ready: bool) -> void:
 func _on_lan_match_start_requested() -> void:
 	if match_status_label:
 		match_status_label.text = "LAN match started."
+	_refresh_room_state_ui()
+
+
+func _on_lan_connection_lost(message: String) -> void:
+	_set_status(message)
+	if match_status_label:
+		match_status_label.text = message
+	_refresh_players_label()
 	_refresh_room_state_ui()
 
 

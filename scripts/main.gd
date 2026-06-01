@@ -19,6 +19,7 @@ var save_manager: RefCounted
 var audio_manager: Node
 var network_manager: Node
 var current_mode := "single_player"
+var lan_recovery_in_progress: bool = false
 
 
 func _ready() -> void:
@@ -32,6 +33,7 @@ func _ready() -> void:
 	network_manager = NetworkManagerScript.new()
 	add_child(network_manager)
 	network_manager.lan_match_start_requested.connect(_on_lan_match_start_requested)
+	network_manager.lan_connection_lost.connect(_on_lan_connection_lost)
 	if audio_manager.has_method("set_sfx_volume_linear"):
 		audio_manager.call("set_sfx_volume_linear", float(save_manager.call("get_sfx_volume")))
 	if audio_manager.has_method("set_muted"):
@@ -196,17 +198,34 @@ func _on_mode_select_back_requested() -> void:
 
 
 func _on_lan_lobby_back_requested() -> void:
+	lan_recovery_in_progress = false
 	_show_mode_select_screen()
 
 
 func _on_lan_match_start_requested() -> void:
 	current_mode = "lan_multiplayer"
+	lan_recovery_in_progress = false
 	_show_game_screen()
 	if game_screen.has_method("start_lan_multiplayer_game"):
 		game_screen.start_lan_multiplayer_game(network_manager)
 
 
+func _on_lan_connection_lost(message: String) -> void:
+	if current_mode != "lan_multiplayer" or lan_recovery_in_progress:
+		return
+	lan_recovery_in_progress = true
+
+	if game_screen and game_screen.visible and game_screen.has_method("handle_lan_connection_lost"):
+		game_screen.handle_lan_connection_lost(message)
+		await get_tree().create_timer(1.2).timeout
+
+	if current_mode == "lan_multiplayer":
+		_show_lan_lobby_screen()
+	lan_recovery_in_progress = false
+
+
 func _on_back_to_menu_pressed() -> void:
+	lan_recovery_in_progress = false
 	if current_mode == "lan_multiplayer" and network_manager and network_manager.has_method("disconnect_from_game"):
 		network_manager.call("disconnect_from_game")
 	if game_screen.has_method("start_new_game"):
@@ -253,6 +272,7 @@ func _on_lan_match_finished(player_1_score: int, player_2_score: int, winner_tex
 
 func _on_play_again_pressed() -> void:
 	if current_mode == "lan_multiplayer":
+		lan_recovery_in_progress = false
 		if network_manager and network_manager.has_method("disconnect_from_game"):
 			network_manager.call("disconnect_from_game")
 		_show_lan_lobby_screen()
@@ -265,6 +285,7 @@ func _on_play_again_pressed() -> void:
 
 
 func _on_result_back_to_menu_pressed() -> void:
+	lan_recovery_in_progress = false
 	if current_mode == "lan_multiplayer" and network_manager and network_manager.has_method("disconnect_from_game"):
 		network_manager.call("disconnect_from_game")
 	if game_screen.has_method("start_new_game"):

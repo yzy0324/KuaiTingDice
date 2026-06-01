@@ -8,6 +8,7 @@ signal room_state_changed
 signal ready_state_changed(local_ready: bool, remote_ready: bool)
 signal lan_match_start_requested
 signal lan_state_snapshot_received(snapshot: Dictionary)
+signal lan_connection_lost(message: String)
 
 const LanMatchControllerScript = preload("res://scripts/core/lan_match_controller.gd")
 
@@ -22,6 +23,7 @@ var room_started: bool = false
 var connected_peer_count: int = 0
 var player_peer_ids: Dictionary = {1: 1, 2: 0}
 var lan_match_controller
+var intentional_disconnect: bool = false
 
 
 func _ready() -> void:
@@ -38,12 +40,14 @@ func host_game(port: int) -> bool:
 		return false
 
 	disconnect_from_game()
+	intentional_disconnect = false
 	peer = ENetMultiplayerPeer.new()
 	var error := peer.create_server(port, 2)
 	if error != OK:
 		peer = null
 		hosting = false
 		current_host_port = 0
+		intentional_disconnect = false
 		_emit_status("Could not host on port %d." % port)
 		return false
 
@@ -73,12 +77,14 @@ func join_game(address: String, port: int) -> bool:
 		return false
 
 	disconnect_from_game()
+	intentional_disconnect = false
 	peer = ENetMultiplayerPeer.new()
 	var error := peer.create_client(clean_address, port)
 	if error != OK:
 		peer = null
 		hosting = false
 		current_host_port = 0
+		intentional_disconnect = false
 		_emit_status("Could not connect to %s:%d." % [clean_address, port])
 		return false
 
@@ -99,6 +105,7 @@ func join_game(address: String, port: int) -> bool:
 
 
 func disconnect_from_game() -> void:
+	intentional_disconnect = true
 	if peer != null:
 		peer.close()
 	peer = null
@@ -210,6 +217,8 @@ func get_local_lan_addresses() -> Array:
 
 @rpc("any_peer", "reliable")
 func _rpc_set_remote_ready(value: bool) -> void:
+	if not is_connected_to_game() or room_started:
+		return
 	remote_ready = value
 	_emit_ready_state_changed()
 	_emit_room_state_changed()
@@ -217,6 +226,8 @@ func _rpc_set_remote_ready(value: bool) -> void:
 
 @rpc("any_peer", "reliable")
 func _rpc_start_lan_match() -> void:
+	if not is_connected_to_game():
+		return
 	room_started = true
 	_emit_status("LAN match started.")
 	_emit_room_state_changed()
@@ -253,6 +264,8 @@ func _rpc_request_lan_score_category(category: String) -> void:
 
 @rpc("any_peer", "reliable")
 func _rpc_receive_lan_state_snapshot(snapshot: Dictionary) -> void:
+	if not is_connected_to_game() or not room_started:
+		return
 	lan_state_snapshot_received.emit(snapshot)
 
 
@@ -328,16 +341,22 @@ func _on_peer_connected(peer_id: int) -> void:
 
 
 func _on_peer_disconnected(peer_id: int) -> void:
+	var lost_message := "Player 2 disconnected."
 	remote_ready = false
 	room_started = false
 	connected_peer_count = max(connected_peer_count - 1, 0)
 	if hosting and player_peer_ids.get(2, 0) == peer_id:
 		player_peer_ids[2] = 0
+	elif not hosting:
+		lost_message = "Connection lost."
+	local_ready = false
 	lan_match_controller = null
 	peer_disconnected_from_lobby.emit(peer_id)
-	_emit_status("Peer %d disconnected." % peer_id)
+	_emit_status(lost_message)
 	_emit_ready_state_changed()
 	_emit_room_state_changed()
+	if not intentional_disconnect:
+		lan_connection_lost.emit(lost_message)
 
 
 func _on_connected_to_server() -> void:
@@ -352,6 +371,8 @@ func _on_connection_failed() -> void:
 	current_host_port = 0
 	_reset_room_state()
 	_emit_status("Connection failed.")
+	if not intentional_disconnect:
+		lan_connection_lost.emit("Connection lost.")
 
 
 func _on_server_disconnected() -> void:
@@ -359,7 +380,9 @@ func _on_server_disconnected() -> void:
 	hosting = false
 	current_host_port = 0
 	_reset_room_state()
-	_emit_status("Server disconnected.")
+	_emit_status("Host disconnected.")
+	if not intentional_disconnect:
+		lan_connection_lost.emit("Host disconnected.")
 
 
 func _ensure_lan_match_controller() -> bool:
