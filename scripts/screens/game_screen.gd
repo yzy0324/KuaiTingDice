@@ -45,6 +45,7 @@ var p1_used_label: Label
 var p2_used_label: Label
 var current_turn_value_label: Label
 var multiplayer_rolls_label: Label
+var main_content_center: CenterContainer
 var game_over_label: Label
 var roll_button: Button
 var new_game_button: Button
@@ -79,6 +80,11 @@ func _ready() -> void:
 	game_controller = GameControllerScript.new()
 	_build_ui()
 	start_new_game()
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_RESIZED:
+		_update_main_content_center_size()
 
 
 func _build_ui() -> void:
@@ -120,10 +126,18 @@ func _build_ui() -> void:
 	scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
 	screen_margin.add_child(scroll)
 
+	main_content_center = CenterContainer.new()
+	main_content_center.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	main_content_center.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.add_child(main_content_center)
+
 	var root_layout := VBoxContainer.new()
-	root_layout.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	root_layout.add_theme_constant_override("separation", 14)
-	scroll.add_child(root_layout)
+	root_layout.custom_minimum_size = Vector2(1020, 0)
+	root_layout.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	root_layout.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	root_layout.add_theme_constant_override("separation", 12)
+	main_content_center.add_child(root_layout)
+	_update_main_content_center_size()
 
 	var hud_panel := PanelContainer.new()
 	hud_panel.custom_minimum_size = Vector2(960, 0)
@@ -672,6 +686,16 @@ func _set_label_font_and_color(label: Label, font_size: int, color: Color, use_d
 		_apply_display_font(label)
 	else:
 		_apply_ui_font(label)
+
+
+func _update_main_content_center_size() -> void:
+	if main_content_center == null:
+		return
+	var viewport_size: Vector2 = get_viewport_rect().size
+	var centered_area: Vector2 = viewport_size - Vector2(112, 68)
+	centered_area.x = max(centered_area.x, 0.0)
+	centered_area.y = max(centered_area.y, 0.0)
+	main_content_center.custom_minimum_size = centered_area
 
 
 func _add_single_hud_card(parent: Control, label_text: String) -> Label:
