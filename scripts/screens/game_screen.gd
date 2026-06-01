@@ -31,6 +31,20 @@ var is_animating: bool = false
 var title_label: Label
 var info_label: Label
 var rolls_left_label: Label
+var single_hud_row: HBoxContainer
+var multiplayer_hud_row: HBoxContainer
+var single_round_value_label: Label
+var single_score_value_label: Label
+var single_rolls_value_label: Label
+var p1_card_panel: PanelContainer
+var p2_card_panel: PanelContainer
+var current_turn_card_panel: PanelContainer
+var p1_score_label: Label
+var p2_score_label: Label
+var p1_used_label: Label
+var p2_used_label: Label
+var current_turn_value_label: Label
+var multiplayer_rolls_label: Label
 var game_over_label: Label
 var roll_button: Button
 var new_game_button: Button
@@ -112,14 +126,14 @@ func _build_ui() -> void:
 	scroll.add_child(root_layout)
 
 	var hud_panel := PanelContainer.new()
-	hud_panel.custom_minimum_size = Vector2(740, 0)
+	hud_panel.custom_minimum_size = Vector2(960, 0)
 	hud_panel.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	hud_panel.add_theme_stylebox_override("panel", _make_hud_panel_style())
 	root_layout.add_child(hud_panel)
 
 	var hud_layout := VBoxContainer.new()
 	hud_layout.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	hud_layout.add_theme_constant_override("separation", 4)
+	hud_layout.add_theme_constant_override("separation", 12)
 	hud_panel.add_child(hud_layout)
 
 	title_label = Label.new()
@@ -128,8 +142,39 @@ func _build_ui() -> void:
 	title_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	title_label.add_theme_font_size_override("font_size", 58)
 	_apply_display_font(title_label)
-	title_label.add_theme_color_override("font_color", Color(0.95, 0.93, 0.88, 1.0))
+	title_label.add_theme_color_override("font_color", Color(0.78, 0.72, 0.63, 1.0))
 	hud_layout.add_child(title_label)
+
+	single_hud_row = HBoxContainer.new()
+	single_hud_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	single_hud_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	single_hud_row.add_theme_constant_override("separation", 18)
+	hud_layout.add_child(single_hud_row)
+
+	single_round_value_label = _add_single_hud_card(single_hud_row, "ROUND")
+	single_score_value_label = _add_single_hud_card(single_hud_row, "TOTAL SCORE")
+	single_rolls_value_label = _add_single_hud_card(single_hud_row, "ROLLS LEFT")
+
+	multiplayer_hud_row = HBoxContainer.new()
+	multiplayer_hud_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	multiplayer_hud_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	multiplayer_hud_row.add_theme_constant_override("separation", 18)
+	hud_layout.add_child(multiplayer_hud_row)
+
+	var p1_labels: Dictionary = _add_player_hud_card(multiplayer_hud_row, "PLAYER 1")
+	p1_card_panel = p1_labels["panel"] as PanelContainer
+	p1_score_label = p1_labels["score"] as Label
+	p1_used_label = p1_labels["used"] as Label
+
+	var turn_labels: Dictionary = _add_turn_hud_card(multiplayer_hud_row)
+	current_turn_card_panel = turn_labels["panel"] as PanelContainer
+	current_turn_value_label = turn_labels["turn"] as Label
+	multiplayer_rolls_label = turn_labels["rolls"] as Label
+
+	var p2_labels: Dictionary = _add_player_hud_card(multiplayer_hud_row, "PLAYER 2")
+	p2_card_panel = p2_labels["panel"] as PanelContainer
+	p2_score_label = p2_labels["score"] as Label
+	p2_used_label = p2_labels["used"] as Label
 
 	info_label = Label.new()
 	info_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -137,6 +182,7 @@ func _build_ui() -> void:
 	info_label.add_theme_font_size_override("font_size", 26)
 	_apply_ui_font(info_label)
 	info_label.add_theme_color_override("font_color", Color(0.88, 0.87, 0.83, 1.0))
+	info_label.visible = false
 	hud_layout.add_child(info_label)
 
 	rolls_left_label = Label.new()
@@ -145,6 +191,7 @@ func _build_ui() -> void:
 	rolls_left_label.add_theme_font_size_override("font_size", 26)
 	_apply_ui_font(rolls_left_label)
 	rolls_left_label.add_theme_color_override("font_color", Color(0.62, 0.76, 0.55, 1.0))
+	rolls_left_label.visible = false
 	hud_layout.add_child(rolls_left_label)
 
 	var dice_tray := PanelContainer.new()
@@ -618,6 +665,154 @@ func _apply_ui_font(control: Control) -> void:
 		control.add_theme_font_override("font", ui_font)
 
 
+func _set_label_font_and_color(label: Label, font_size: int, color: Color, use_display_font: bool = false) -> void:
+	label.add_theme_font_size_override("font_size", font_size)
+	label.add_theme_color_override("font_color", color)
+	if use_display_font:
+		_apply_display_font(label)
+	else:
+		_apply_ui_font(label)
+
+
+func _add_single_hud_card(parent: Control, label_text: String) -> Label:
+	var card := PanelContainer.new()
+	card.custom_minimum_size = Vector2(240, 74)
+	card.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	card.add_theme_stylebox_override("panel", _make_hud_card_style(false))
+	parent.add_child(card)
+
+	var layout := VBoxContainer.new()
+	layout.alignment = BoxContainer.ALIGNMENT_CENTER
+	layout.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	layout.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	layout.add_theme_constant_override("separation", 2)
+	card.add_child(layout)
+
+	var label := Label.new()
+	label.text = label_text
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_set_label_font_and_color(label, 18, Color(0.78, 0.72, 0.63, 1.0))
+	layout.add_child(label)
+
+	var value_label := Label.new()
+	value_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	value_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_set_label_font_and_color(value_label, 30, Color(0.11, 0.78, 0.11, 1.0), true)
+	layout.add_child(value_label)
+	return value_label
+
+
+func _add_player_hud_card(parent: Control, player_name: String) -> Dictionary:
+	var card := PanelContainer.new()
+	card.custom_minimum_size = Vector2(270, 102)
+	card.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	card.add_theme_stylebox_override("panel", _make_hud_card_style(false))
+	parent.add_child(card)
+
+	var layout := VBoxContainer.new()
+	layout.alignment = BoxContainer.ALIGNMENT_CENTER
+	layout.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	layout.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	layout.add_theme_constant_override("separation", 4)
+	card.add_child(layout)
+
+	var title := Label.new()
+	title.text = player_name
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_set_label_font_and_color(title, 24, Color(0.78, 0.72, 0.63, 1.0), true)
+	layout.add_child(title)
+
+	var score_label := Label.new()
+	score_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	score_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_set_label_font_and_color(score_label, 26, Color(0.11, 0.78, 0.11, 1.0), true)
+	layout.add_child(score_label)
+
+	var used_label := Label.new()
+	used_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	used_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_set_label_font_and_color(used_label, 18, Color(0.68, 0.66, 0.60, 1.0))
+	layout.add_child(used_label)
+
+	return {"panel": card, "score": score_label, "used": used_label}
+
+
+func _add_turn_hud_card(parent: Control) -> Dictionary:
+	var card := PanelContainer.new()
+	card.custom_minimum_size = Vector2(300, 112)
+	card.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	card.add_theme_stylebox_override("panel", _make_hud_card_style(true))
+	parent.add_child(card)
+
+	var layout := VBoxContainer.new()
+	layout.alignment = BoxContainer.ALIGNMENT_CENTER
+	layout.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	layout.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	layout.add_theme_constant_override("separation", 4)
+	card.add_child(layout)
+
+	var label := Label.new()
+	label.text = "CURRENT TURN"
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_set_label_font_and_color(label, 18, Color(0.78, 0.72, 0.63, 1.0))
+	layout.add_child(label)
+
+	var turn_label := Label.new()
+	turn_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	turn_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_set_label_font_and_color(turn_label, 32, Color(0.70, 0.20, 0.16, 1.0), true)
+	layout.add_child(turn_label)
+
+	var rolls_label := Label.new()
+	rolls_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	rolls_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_set_label_font_and_color(rolls_label, 26, Color(0.11, 0.78, 0.11, 1.0), true)
+	layout.add_child(rolls_label)
+
+	return {"panel": card, "turn": turn_label, "rolls": rolls_label}
+
+
+func _show_single_hud() -> void:
+	if single_hud_row:
+		single_hud_row.visible = true
+	if multiplayer_hud_row:
+		multiplayer_hud_row.visible = false
+
+
+func _show_multiplayer_hud() -> void:
+	if single_hud_row:
+		single_hud_row.visible = false
+	if multiplayer_hud_row:
+		multiplayer_hud_row.visible = true
+
+
+func _update_single_hud(round_number: int, total_score: int, rolls_left: int) -> void:
+	_show_single_hud()
+	title_label.text = "快艇骰子"
+	single_round_value_label.text = "%d / 13" % round_number
+	single_score_value_label.text = str(total_score)
+	single_rolls_value_label.text = str(rolls_left)
+	info_label.text = "Round: %d / 13      Total Score: %d" % [round_number, total_score]
+	rolls_left_label.text = "Rolls Left: %d" % rolls_left
+
+
+func _update_multiplayer_hud(player_1_score: int, player_2_score: int, player_1_used: int, player_2_used: int, active_player_number: int, rolls_left: int) -> void:
+	_show_multiplayer_hud()
+	title_label.text = "快艇骰子"
+	p1_score_label.text = "Score: %d" % player_1_score
+	p2_score_label.text = "Score: %d" % player_2_score
+	p1_used_label.text = "Used: %d / 13" % player_1_used
+	p2_used_label.text = "Used: %d / 13" % player_2_used
+	current_turn_value_label.text = "Player %d" % active_player_number
+	multiplayer_rolls_label.text = "Rolls Left: %d" % rolls_left
+	p1_card_panel.add_theme_stylebox_override("panel", _make_hud_card_style(active_player_number == 1))
+	p2_card_panel.add_theme_stylebox_override("panel", _make_hud_card_style(active_player_number == 2))
+	current_turn_card_panel.add_theme_stylebox_override("panel", _make_hud_card_style(true))
+
+
 func _refresh_ui() -> void:
 	if game_mode == "lan_multiplayer":
 		_refresh_lan_ui()
@@ -627,21 +822,23 @@ func _refresh_ui() -> void:
 	if active_controller == null:
 		return
 
-	if game_mode == "local_two_player":
-		title_label.text = "Local Two Player"
-	else:
-		title_label.text = "快艇骰子"
-
 	var rolls_left: int = MAX_ROLLS_PER_ROUND - int(active_controller.state.rolls_used)
 	if game_mode == "local_two_player" and local_two_player_controller != null:
+		_update_multiplayer_hud(
+			local_two_player_controller.get_player_score(0),
+			local_two_player_controller.get_player_score(1),
+			local_two_player_controller.get_used_count(0),
+			local_two_player_controller.get_used_count(1),
+			local_two_player_controller.get_active_player_number(),
+			rolls_left
+		)
 		info_label.text = "PLAYER %d TURN      P1 Score: %d      P2 Score: %d" % [
 			local_two_player_controller.get_active_player_number(),
 			local_two_player_controller.get_player_score(0),
 			local_two_player_controller.get_player_score(1)
 		]
 	else:
-		info_label.text = "Round: %d / 13      Total Score: %d" % [active_controller.state.round_number, active_controller.get_total_score()]
-	rolls_left_label.text = "Rolls Left: %d" % rolls_left
+		_update_single_hud(active_controller.state.round_number, active_controller.get_total_score(), rolls_left)
 	roll_button.text = "ROLL (%d left)" % rolls_left
 	roll_button.disabled = is_animating or (not active_controller.can_roll())
 
@@ -762,10 +959,19 @@ func _refresh_lan_ui() -> void:
 	if local_score_panel:
 		local_score_panel.visible = true
 
-	title_label.text = "LAN Multiplayer"
+	title_label.text = "快艇骰子"
 	if lan_connection_lost:
+		_show_multiplayer_hud()
 		info_label.text = lan_connection_lost_message
 		rolls_left_label.text = "Connection lost. Returning to LAN Lobby."
+		p1_score_label.text = "Score: -"
+		p2_score_label.text = "Score: -"
+		p1_used_label.text = "Used: - / 13"
+		p2_used_label.text = "Used: - / 13"
+		current_turn_value_label.text = "Lost"
+		multiplayer_rolls_label.text = "Returning..."
+		p1_card_panel.add_theme_stylebox_override("panel", _make_hud_card_style(false))
+		p2_card_panel.add_theme_stylebox_override("panel", _make_hud_card_style(false))
 		roll_button.text = "ROLL"
 		roll_button.disabled = true
 		for i in range(DICE_COUNT):
@@ -776,8 +982,17 @@ func _refresh_lan_ui() -> void:
 		return
 
 	if lan_snapshot.is_empty():
+		_show_multiplayer_hud()
 		info_label.text = "Waiting for host snapshot..."
 		rolls_left_label.text = "Connected LAN match"
+		p1_score_label.text = "Score: -"
+		p2_score_label.text = "Score: -"
+		p1_used_label.text = "Used: - / 13"
+		p2_used_label.text = "Used: - / 13"
+		current_turn_value_label.text = "Waiting"
+		multiplayer_rolls_label.text = "Rolls Left: -"
+		p1_card_panel.add_theme_stylebox_override("panel", _make_hud_card_style(false))
+		p2_card_panel.add_theme_stylebox_override("panel", _make_hud_card_style(false))
 		roll_button.text = "ROLL"
 		roll_button.disabled = true
 		for i in range(DICE_COUNT):
@@ -795,6 +1010,11 @@ func _refresh_lan_ui() -> void:
 	var rolls_left: int = MAX_ROLLS_PER_ROUND - int(active_player.get("rolls_used", 0))
 	var p1_score: int = int(lan_snapshot.get("player_1_score", 0))
 	var p2_score: int = int(lan_snapshot.get("player_2_score", 0))
+	var players: Array = lan_snapshot.get("players", [])
+	var p1_used: int = _get_lan_player_used_count(players, 0)
+	var p2_used: int = _get_lan_player_used_count(players, 1)
+
+	_update_multiplayer_hud(p1_score, p2_score, p1_used, p2_used, active_player_number, rolls_left)
 
 	info_label.text = "You are Player %d      Current Turn: Player %d      P1: %d      P2: %d" % [
 		local_player_number,
@@ -895,6 +1115,12 @@ func _get_lan_active_player_snapshot() -> Dictionary:
 	if active_index >= 0 and active_index < players.size() and typeof(players[active_index]) == TYPE_DICTIONARY:
 		return players[active_index]
 	return {}
+
+
+func _get_lan_player_used_count(players: Array, player_index: int) -> int:
+	if player_index >= 0 and player_index < players.size() and typeof(players[player_index]) == TYPE_DICTIONARY:
+		return int(players[player_index].get("used_count", 0))
+	return 0
 
 
 func _get_lan_local_player_number() -> int:
@@ -1021,14 +1247,31 @@ func _add_crt_overlay() -> void:
 
 func _make_hud_panel_style() -> StyleBoxFlat:
 	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.025, 0.03, 0.028, 0.74)
-	style.border_color = Color(0.34, 0.38, 0.27, 0.86)
+	style.bg_color = Color(0.018, 0.022, 0.020, 0.78)
+	style.border_color = Color(0.28, 0.34, 0.23, 0.88)
 	style.set_border_width_all(2)
 	style.set_corner_radius_all(6)
-	style.content_margin_left = 24
+	style.content_margin_left = 28
+	style.content_margin_top = 14
+	style.content_margin_right = 28
+	style.content_margin_bottom = 18
+	return style
+
+
+func _make_hud_card_style(active: bool = false) -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	if active:
+		style.bg_color = Color(0.08, 0.035, 0.030, 0.88)
+		style.border_color = Color(0.58, 0.18, 0.13, 0.98)
+	else:
+		style.bg_color = Color(0.035, 0.042, 0.038, 0.82)
+		style.border_color = Color(0.24, 0.30, 0.22, 0.86)
+	style.set_border_width_all(2)
+	style.set_corner_radius_all(5)
+	style.content_margin_left = 18
 	style.content_margin_top = 10
-	style.content_margin_right = 24
-	style.content_margin_bottom = 12
+	style.content_margin_right = 18
+	style.content_margin_bottom = 10
 	return style
 
 
