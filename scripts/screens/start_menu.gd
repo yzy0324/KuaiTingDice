@@ -3,6 +3,9 @@ extends Control
 
 signal start_requested
 
+var display_font: Font
+var ui_font: Font
+
 
 func _ready() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT, true)
@@ -12,6 +15,8 @@ func _ready() -> void:
 func _build_ui() -> void:
 	for child in get_children():
 		child.queue_free()
+	display_font = _load_font("res://assets/fonts/display_font.ttf")
+	ui_font = _load_font("res://assets/fonts/ui_font.ttf")
 
 	var bg := TextureRect.new()
 	bg.texture = _load_first_existing_texture([
@@ -46,6 +51,7 @@ func _build_ui() -> void:
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.add_theme_font_size_override("font_size", 64)
+	_apply_display_font(title)
 	title.add_theme_color_override("font_color", Color(0.94, 0.92, 0.86, 1.0))
 	root_layout.add_child(title)
 
@@ -55,6 +61,7 @@ func _build_ui() -> void:
 	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	subtitle.add_theme_color_override("font_color", Color(0.84, 0.84, 0.8, 0.95))
 	subtitle.add_theme_font_size_override("font_size", 22)
+	_apply_ui_font(subtitle)
 	root_layout.add_child(subtitle)
 
 	var rules_panel := PanelContainer.new()
@@ -68,6 +75,7 @@ func _build_ui() -> void:
 	rules.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	rules.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	rules.add_theme_font_size_override("font_size", 18)
+	_apply_ui_font(rules)
 	rules.add_theme_color_override("font_color", Color(0.88, 0.87, 0.83, 0.98))
 	rules.text = "Rules:\n- Roll 5 dice.\n- You may roll up to 3 times each round.\n- Click dice to HOLD them.\n- Choose one unused score category each round.\n- The game ends after all 13 categories are used."
 	rules_panel.add_child(rules)
@@ -76,6 +84,7 @@ func _build_ui() -> void:
 	start_button.text = "Start Game"
 	start_button.custom_minimum_size = Vector2(420, 64)
 	start_button.add_theme_font_size_override("font_size", 28)
+	_apply_ui_font(start_button)
 	start_button.add_theme_color_override("font_color", Color(0.94, 0.92, 0.86, 1.0))
 	start_button.add_theme_stylebox_override("normal", _make_button_style(Color(0.09, 0.1, 0.1, 0.95), Color(0.42, 0.38, 0.32, 0.9)))
 	start_button.add_theme_stylebox_override("hover", _make_button_style(Color(0.13, 0.14, 0.14, 0.98), Color(0.52, 0.2, 0.16, 0.95)))
@@ -88,6 +97,16 @@ func _build_ui() -> void:
 
 func _on_start_button_pressed() -> void:
 	start_requested.emit()
+
+
+func _apply_display_font(control: Control) -> void:
+	if display_font != null:
+		control.add_theme_font_override("font", display_font)
+
+
+func _apply_ui_font(control: Control) -> void:
+	if ui_font != null:
+		control.add_theme_font_override("font", ui_font)
 
 
 func _add_crt_overlay() -> void:
@@ -147,4 +166,10 @@ func _load_first_existing_texture(paths: Array) -> Texture2D:
 	for path in paths:
 		if ResourceLoader.exists(path):
 			return load(path)
+	return null
+
+
+func _load_font(path: String) -> Font:
+	if ResourceLoader.exists(path):
+		return load(path) as Font
 	return null

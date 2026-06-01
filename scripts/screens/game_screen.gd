@@ -40,6 +40,8 @@ var dice_shadow_texture: Texture2D
 var dice_hold_texture: Texture2D
 var warned_missing_assets: Dictionary = {}
 var rolling_indices: Dictionary = {}
+var display_font: Font
+var ui_font: Font
 
 
 func _ready() -> void:
@@ -57,6 +59,8 @@ func _build_ui() -> void:
 	dice_hold_overlays.clear()
 	dice_value_labels.clear()
 	category_buttons.clear()
+	display_font = _load_font("res://assets/fonts/display_font.ttf")
+	ui_font = _load_font("res://assets/fonts/ui_font.ttf")
 	_load_dice_assets()
 
 	var bg := TextureRect.new()
@@ -103,12 +107,10 @@ func _build_ui() -> void:
 
 	title_label = Label.new()
 	title_label.text = "快艇骰子"
-	title_label.text = "快艇骰子"
-	title_label.text = "快艇骰子"
-	title_label.text = "\u5feb\u8247\u9ab0\u5b50"
 	title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	title_label.add_theme_font_size_override("font_size", 58)
+	_apply_display_font(title_label)
 	title_label.add_theme_color_override("font_color", Color(0.95, 0.93, 0.88, 1.0))
 	hud_layout.add_child(title_label)
 
@@ -116,6 +118,7 @@ func _build_ui() -> void:
 	info_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	info_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	info_label.add_theme_font_size_override("font_size", 26)
+	_apply_ui_font(info_label)
 	info_label.add_theme_color_override("font_color", Color(0.88, 0.87, 0.83, 1.0))
 	hud_layout.add_child(info_label)
 
@@ -123,6 +126,7 @@ func _build_ui() -> void:
 	rolls_left_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	rolls_left_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	rolls_left_label.add_theme_font_size_override("font_size", 26)
+	_apply_ui_font(rolls_left_label)
 	rolls_left_label.add_theme_color_override("font_color", Color(0.62, 0.76, 0.55, 1.0))
 	hud_layout.add_child(rolls_left_label)
 
@@ -189,6 +193,7 @@ func _build_ui() -> void:
 		value_label.size_flags_vertical = Control.SIZE_EXPAND_FILL
 		value_label.set_anchors_preset(Control.PRESET_FULL_RECT, true)
 		value_label.add_theme_font_size_override("font_size", 20)
+		_apply_ui_font(value_label)
 		value_label.add_theme_color_override("font_color", Color(0.95, 0.93, 0.88, 1.0))
 		die_button.add_child(value_label)
 		dice_value_labels.append(value_label)
@@ -197,6 +202,7 @@ func _build_ui() -> void:
 	roll_button.text = "ROLL"
 	roll_button.custom_minimum_size = Vector2(380, 62)
 	roll_button.add_theme_font_size_override("font_size", 30)
+	_apply_display_font(roll_button)
 	roll_button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	_apply_roll_button_style()
 	roll_button.pressed.connect(_on_roll_pressed)
@@ -229,12 +235,14 @@ func _build_ui() -> void:
 	upper_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	upper_label.add_theme_color_override("font_color", Color(0.9, 0.88, 0.84, 1.0))
 	upper_label.add_theme_font_size_override("font_size", 24)
+	_apply_display_font(upper_label)
 	upper_layout.add_child(upper_label)
 
 	for category in UPPER_CATEGORIES:
 		var upper_button := Button.new()
 		upper_button.custom_minimum_size = Vector2(360, 50)
 		upper_button.add_theme_font_size_override("font_size", 21)
+		_apply_ui_font(upper_button)
 		upper_button.pressed.connect(_on_category_pressed.bind(category))
 		category_buttons[category] = upper_button
 		upper_layout.add_child(upper_button)
@@ -255,12 +263,14 @@ func _build_ui() -> void:
 	lower_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	lower_label.add_theme_color_override("font_color", Color(0.9, 0.88, 0.84, 1.0))
 	lower_label.add_theme_font_size_override("font_size", 24)
+	_apply_display_font(lower_label)
 	lower_layout.add_child(lower_label)
 
 	for category in LOWER_CATEGORIES:
 		var lower_button := Button.new()
 		lower_button.custom_minimum_size = Vector2(360, 50)
 		lower_button.add_theme_font_size_override("font_size", 21)
+		_apply_ui_font(lower_button)
 		lower_button.pressed.connect(_on_category_pressed.bind(category))
 		category_buttons[category] = lower_button
 		lower_layout.add_child(lower_button)
@@ -275,6 +285,8 @@ func _build_ui() -> void:
 	new_game_button.text = "New Game"
 	new_game_button.custom_minimum_size = Vector2(220, 48)
 	new_game_button.add_theme_font_size_override("font_size", 22)
+	_apply_ui_font(new_game_button)
+	new_game_button.add_theme_color_override("font_color", Color(0.93, 0.91, 0.84, 1.0))
 	new_game_button.add_theme_stylebox_override("normal", _make_std_button_style(Color(0.09, 0.10, 0.10, 0.95), Color(0.42, 0.38, 0.32, 0.9)))
 	new_game_button.add_theme_stylebox_override("hover", _make_std_button_style(Color(0.13, 0.14, 0.14, 0.98), Color(0.52, 0.2, 0.16, 0.95)))
 	new_game_button.add_theme_stylebox_override("pressed", _make_std_button_style(Color(0.06, 0.07, 0.07, 1.0), Color(0.35, 0.15, 0.12, 0.95)))
@@ -285,6 +297,8 @@ func _build_ui() -> void:
 	back_button.text = "Back to Menu"
 	back_button.custom_minimum_size = Vector2(220, 48)
 	back_button.add_theme_font_size_override("font_size", 22)
+	_apply_ui_font(back_button)
+	back_button.add_theme_color_override("font_color", Color(0.93, 0.91, 0.84, 1.0))
 	back_button.add_theme_stylebox_override("normal", _make_std_button_style(Color(0.09, 0.10, 0.10, 0.95), Color(0.42, 0.38, 0.32, 0.9)))
 	back_button.add_theme_stylebox_override("hover", _make_std_button_style(Color(0.13, 0.14, 0.14, 0.98), Color(0.52, 0.2, 0.16, 0.95)))
 	back_button.add_theme_stylebox_override("pressed", _make_std_button_style(Color(0.06, 0.07, 0.07, 1.0), Color(0.35, 0.15, 0.12, 0.95)))
@@ -295,6 +309,7 @@ func _build_ui() -> void:
 	game_over_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	game_over_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	game_over_label.add_theme_font_size_override("font_size", 34)
+	_apply_display_font(game_over_label)
 	game_over_label.add_theme_color_override("font_color", Color(0.95, 0.84, 0.80, 1.0))
 	game_over_label.visible = false
 	root_layout.add_child(game_over_label)
@@ -360,6 +375,16 @@ func _on_back_to_menu_pressed() -> void:
 	back_to_menu_requested.emit()
 
 
+func _apply_display_font(control: Control) -> void:
+	if display_font != null:
+		control.add_theme_font_override("font", display_font)
+
+
+func _apply_ui_font(control: Control) -> void:
+	if ui_font != null:
+		control.add_theme_font_override("font", ui_font)
+
+
 func _refresh_ui() -> void:
 	if game_controller == null:
 		return
@@ -386,6 +411,7 @@ func _refresh_ui() -> void:
 		if game_controller.state.used_categories.has(category):
 			button.text = "%s: %d (USED)" % [category, game_controller.state.scores[category]]
 			button.disabled = true
+			button.add_theme_color_override("font_disabled_color", Color(0.64, 0.62, 0.56, 0.95))
 			button.add_theme_stylebox_override("normal", _make_used_category_style())
 			button.add_theme_stylebox_override("disabled", _make_used_category_style())
 		else:
@@ -402,6 +428,8 @@ func _refresh_ui() -> void:
 
 
 func _apply_roll_button_style() -> void:
+	roll_button.add_theme_color_override("font_color", Color(0.95, 0.93, 0.86, 1.0))
+	roll_button.add_theme_color_override("font_disabled_color", Color(0.62, 0.61, 0.56, 0.95))
 	roll_button.add_theme_stylebox_override("normal", _make_std_button_style(Color(0.09, 0.1, 0.1, 0.98), Color(0.42, 0.38, 0.32, 0.92)))
 	roll_button.add_theme_stylebox_override("hover", _make_std_button_style(Color(0.12, 0.14, 0.13, 1.0), Color(0.47, 0.58, 0.36, 0.95)))
 	roll_button.add_theme_stylebox_override("pressed", _make_std_button_style(Color(0.06, 0.07, 0.07, 1.0), Color(0.32, 0.4, 0.24, 0.95)))
@@ -420,6 +448,8 @@ func _apply_dice_button_style(button: Button, held: bool) -> void:
 
 
 func _apply_category_button_style(button: Button) -> void:
+	button.add_theme_color_override("font_color", Color(0.92, 0.90, 0.84, 1.0))
+	button.add_theme_color_override("font_disabled_color", Color(0.58, 0.57, 0.52, 0.95))
 	button.add_theme_stylebox_override("normal", _make_std_button_style(Color(0.08, 0.09, 0.09, 0.94), Color(0.36, 0.34, 0.3, 0.9)))
 	button.add_theme_stylebox_override("hover", _make_std_button_style(Color(0.11, 0.12, 0.12, 0.98), Color(0.52, 0.2, 0.16, 0.95)))
 	button.add_theme_stylebox_override("pressed", _make_std_button_style(Color(0.06, 0.07, 0.07, 1.0), Color(0.36, 0.15, 0.12, 0.95)))
@@ -581,4 +611,10 @@ func _load_first_existing_texture(paths: Array) -> Texture2D:
 	for path in paths:
 		if ResourceLoader.exists(path):
 			return load(path)
+	return null
+
+
+func _load_font(path: String) -> Font:
+	if ResourceLoader.exists(path):
+		return load(path) as Font
 	return null
