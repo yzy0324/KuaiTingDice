@@ -2,6 +2,7 @@ class_name AudioManager
 extends Node
 
 const DEFAULT_VOLUME_DB := -6.0
+const MIN_VOLUME_DB := -80.0
 const SFX_PATHS := {
 	"button_click": ["res://assets/audio/sfx_button_click.wav", "res://assets/audio/sfx_button_click.WAV"],
 	"roll": ["res://assets/audio/sfx_roll.wav", "res://assets/audio/sfx_roll.WAV"],
@@ -13,6 +14,8 @@ const SFX_PATHS := {
 
 var players: Dictionary = {}
 var warned_missing_paths: Dictionary = {}
+var sfx_volume_linear: float = 0.8
+var muted: bool = false
 
 
 func _ready() -> void:
@@ -45,9 +48,27 @@ func play_game_over() -> void:
 	_play("game_over")
 
 
+func set_sfx_volume_linear(value: float) -> void:
+	sfx_volume_linear = clampf(value, 0.0, 1.0)
+	_apply_volume_to_players()
+
+
+func get_sfx_volume_linear() -> float:
+	return sfx_volume_linear
+
+
+func set_muted(value: bool) -> void:
+	muted = value
+	_apply_volume_to_players()
+
+
+func is_muted() -> bool:
+	return muted
+
+
 func _create_player(key: String, paths: Array) -> void:
 	var player := AudioStreamPlayer.new()
-	player.volume_db = DEFAULT_VOLUME_DB
+	player.volume_db = _get_current_volume_db()
 
 	var stream_path := _find_existing_path(paths)
 	if stream_path != "":
@@ -68,6 +89,8 @@ func _find_existing_path(paths: Array) -> String:
 
 
 func _play(key: String) -> void:
+	if muted:
+		return
 	if not players.has(key):
 		return
 
@@ -77,6 +100,19 @@ func _play(key: String) -> void:
 
 	player.stop()
 	player.play()
+
+
+func _apply_volume_to_players() -> void:
+	var volume_db := _get_current_volume_db()
+	for key in players.keys():
+		var player: AudioStreamPlayer = players[key]
+		player.volume_db = volume_db
+
+
+func _get_current_volume_db() -> float:
+	if muted or sfx_volume_linear <= 0.0:
+		return MIN_VOLUME_DB
+	return DEFAULT_VOLUME_DB + linear_to_db(sfx_volume_linear)
 
 
 func _warn_missing_audio(path: String) -> void:

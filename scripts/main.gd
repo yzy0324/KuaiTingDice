@@ -22,6 +22,10 @@ func _ready() -> void:
 	save_manager.load_save()
 	audio_manager = AudioManagerScript.new()
 	add_child(audio_manager)
+	if audio_manager.has_method("set_sfx_volume_linear"):
+		audio_manager.call("set_sfx_volume_linear", float(save_manager.call("get_sfx_volume")))
+	if audio_manager.has_method("set_muted"):
+		audio_manager.call("set_muted", bool(save_manager.call("get_sfx_muted")))
 	_build_screens()
 	_show_start_menu()
 
@@ -31,6 +35,8 @@ func _build_screens() -> void:
 	start_menu.start_requested.connect(_on_start_game_pressed)
 	if start_menu.has_method("set_audio_manager"):
 		start_menu.set_audio_manager(audio_manager)
+	if start_menu.has_method("set_save_manager"):
+		start_menu.set_save_manager(save_manager)
 	add_child(start_menu)
 	_force_full_rect(start_menu)
 
