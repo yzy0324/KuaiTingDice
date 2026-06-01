@@ -4,16 +4,20 @@ const StartMenuScript = preload("res://scripts/screens/start_menu.gd")
 const ModeSelectScreenScript = preload("res://scripts/screens/mode_select_screen.gd")
 const GameScreenScript = preload("res://scripts/screens/game_screen.gd")
 const ResultScreenScript = preload("res://scripts/screens/result_screen.gd")
+const LanLobbyScreenScript = preload("res://scripts/screens/lan_lobby_screen.gd")
 const SaveManagerScript = preload("res://scripts/managers/save_manager.gd")
 const AudioManagerScript = preload("res://scripts/managers/audio_manager.gd")
+const NetworkManagerScript = preload("res://scripts/managers/network_manager.gd")
 const ScoringTestsScript = preload("res://scripts/tests/scoring_tests.gd")
 
 var start_menu: Control
 var mode_select_screen: Control
 var game_screen: Control
 var result_screen: Control
+var lan_lobby_screen: Control
 var save_manager: RefCounted
 var audio_manager: Node
+var network_manager: Node
 var current_mode := "single_player"
 
 
@@ -25,6 +29,8 @@ func _ready() -> void:
 	save_manager.load_save()
 	audio_manager = AudioManagerScript.new()
 	add_child(audio_manager)
+	network_manager = NetworkManagerScript.new()
+	add_child(network_manager)
 	if audio_manager.has_method("set_sfx_volume_linear"):
 		audio_manager.call("set_sfx_volume_linear", float(save_manager.call("get_sfx_volume")))
 	if audio_manager.has_method("set_muted"):
@@ -70,6 +76,15 @@ func _build_screens() -> void:
 	add_child(result_screen)
 	_force_full_rect(result_screen)
 
+	lan_lobby_screen = LanLobbyScreenScript.new()
+	lan_lobby_screen.back_requested.connect(_on_lan_lobby_back_requested)
+	if lan_lobby_screen.has_method("set_audio_manager"):
+		lan_lobby_screen.set_audio_manager(audio_manager)
+	if lan_lobby_screen.has_method("set_network_manager"):
+		lan_lobby_screen.set_network_manager(network_manager)
+	add_child(lan_lobby_screen)
+	_force_full_rect(lan_lobby_screen)
+
 
 func _force_full_rect(control: Control) -> void:
 	if control == null:
@@ -91,6 +106,8 @@ func _show_start_menu() -> void:
 		mode_select_screen.visible = false
 	if result_screen:
 		result_screen.visible = false
+	if lan_lobby_screen:
+		lan_lobby_screen.visible = false
 
 
 func _show_mode_select_screen() -> void:
@@ -103,6 +120,8 @@ func _show_mode_select_screen() -> void:
 		game_screen.visible = false
 	if result_screen:
 		result_screen.visible = false
+	if lan_lobby_screen:
+		lan_lobby_screen.visible = false
 
 
 func _show_game_screen() -> void:
@@ -115,6 +134,8 @@ func _show_game_screen() -> void:
 		game_screen.visible = true
 	if result_screen:
 		result_screen.visible = false
+	if lan_lobby_screen:
+		lan_lobby_screen.visible = false
 
 
 func _show_result_screen() -> void:
@@ -127,6 +148,22 @@ func _show_result_screen() -> void:
 	if result_screen:
 		_force_full_rect(result_screen)
 		result_screen.visible = true
+	if lan_lobby_screen:
+		lan_lobby_screen.visible = false
+
+
+func _show_lan_lobby_screen() -> void:
+	if start_menu:
+		start_menu.visible = false
+	if mode_select_screen:
+		mode_select_screen.visible = false
+	if game_screen:
+		game_screen.visible = false
+	if result_screen:
+		result_screen.visible = false
+	if lan_lobby_screen:
+		_force_full_rect(lan_lobby_screen)
+		lan_lobby_screen.visible = true
 
 
 func _on_start_game_pressed() -> void:
@@ -149,10 +186,15 @@ func _on_local_two_player_requested() -> void:
 
 func _on_lan_multiplayer_requested() -> void:
 	current_mode = "lan_multiplayer"
+	_show_lan_lobby_screen()
 
 
 func _on_mode_select_back_requested() -> void:
 	_show_start_menu()
+
+
+func _on_lan_lobby_back_requested() -> void:
+	_show_mode_select_screen()
 
 
 func _on_back_to_menu_pressed() -> void:

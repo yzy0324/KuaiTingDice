@@ -115,7 +115,7 @@ func _on_local_two_player_pressed() -> void:
 
 func _on_lan_multiplayer_pressed() -> void:
 	_play_button_click()
-	coming_soon_label.text = "LAN Multiplayer is coming soon."
+	coming_soon_label.text = ""
 	lan_multiplayer_requested.emit()
 
 
