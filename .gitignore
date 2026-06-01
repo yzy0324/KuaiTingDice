@@ -1,0 +1,21 @@
+# Godot local/editor cache
+.godot/
+.import/
+
+# Export files
+export.cfg
+export_presets.cfg
+
+# Logs and temporary files
+*.log
+*.tmp
+*.bak
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Godot mono / build artifacts if any
+.mono/
+bin/
+obj/
