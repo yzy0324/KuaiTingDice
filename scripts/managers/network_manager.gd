@@ -7,6 +7,9 @@ signal peer_disconnected_from_lobby(peer_id: int)
 signal room_state_changed
 signal ready_state_changed(local_ready: bool, remote_ready: bool)
 signal lan_match_start_requested
+signal lan_state_snapshot_received(snapshot: Dictionary)
+
+const LanMatchControllerScript = preload("res://scripts/core/lan_match_controller.gd")
 
 var peer: ENetMultiplayerPeer
 var hosting: bool = false
@@ -17,6 +20,8 @@ var local_ready: bool = false
 var remote_ready: bool = false
 var room_started: bool = false
 var connected_peer_count: int = 0
+var player_peer_ids: Dictionary = {1: 1, 2: 0}
+var lan_match_controller
 
 
 func _ready() -> void:
@@ -50,6 +55,8 @@ func host_game(port: int) -> bool:
 	remote_ready = false
 	room_started = false
 	connected_peer_count = 0
+	player_peer_ids = {1: 1, 2: 0}
+	lan_match_controller = null
 	multiplayer.multiplayer_peer = peer
 	_emit_status("Hosting on port %d." % port)
 	_emit_room_state_changed()
@@ -83,6 +90,8 @@ func join_game(address: String, port: int) -> bool:
 	remote_ready = false
 	room_started = false
 	connected_peer_count = 0
+	player_peer_ids = {1: 1, 2: 0}
+	lan_match_controller = null
 	multiplayer.multiplayer_peer = peer
 	_emit_status("Connecting to %s:%d..." % [clean_address, port])
 	_emit_room_state_changed()
@@ -136,11 +145,50 @@ func request_start_lan_match() -> void:
 		_emit_status("Both players must be connected and ready.")
 		return
 
+	lan_match_controller = LanMatchControllerScript.new()
+	lan_match_controller.new_match()
 	room_started = true
-	_emit_status("LAN match started. Game sync coming next.")
+	_emit_status("LAN match started.")
 	_emit_room_state_changed()
 	lan_match_start_requested.emit()
 	rpc("_rpc_start_lan_match")
+	_broadcast_lan_snapshot()
+
+
+func request_lan_state_snapshot() -> void:
+	if not is_connected_to_game() or not room_started:
+		return
+	if hosting:
+		_broadcast_lan_snapshot()
+	else:
+		rpc_id(1, "_rpc_request_lan_state_snapshot")
+
+
+func request_lan_roll() -> void:
+	if not is_connected_to_game() or not room_started:
+		return
+	if hosting:
+		_host_apply_roll(local_player_number)
+	else:
+		rpc_id(1, "_rpc_request_lan_roll")
+
+
+func request_lan_toggle_hold(index: int) -> void:
+	if not is_connected_to_game() or not room_started:
+		return
+	if hosting:
+		_host_apply_toggle_hold(local_player_number, index)
+	else:
+		rpc_id(1, "_rpc_request_lan_toggle_hold", index)
+
+
+func request_lan_score_category(category: String) -> void:
+	if not is_connected_to_game() or not room_started:
+		return
+	if hosting:
+		_host_apply_score_category(local_player_number, category)
+	else:
+		rpc_id(1, "_rpc_request_lan_score_category", category)
 
 
 func get_local_lan_addresses() -> Array:
@@ -170,9 +218,42 @@ func _rpc_set_remote_ready(value: bool) -> void:
 @rpc("any_peer", "reliable")
 func _rpc_start_lan_match() -> void:
 	room_started = true
-	_emit_status("LAN match started. Game sync coming next.")
+	_emit_status("LAN match started.")
 	_emit_room_state_changed()
 	lan_match_start_requested.emit()
+
+
+@rpc("any_peer", "reliable")
+func _rpc_request_lan_state_snapshot() -> void:
+	if not hosting:
+		return
+	_broadcast_lan_snapshot()
+
+
+@rpc("any_peer", "reliable")
+func _rpc_request_lan_roll() -> void:
+	if not hosting:
+		return
+	_host_apply_roll(_get_player_number_for_sender())
+
+
+@rpc("any_peer", "reliable")
+func _rpc_request_lan_toggle_hold(index: int) -> void:
+	if not hosting:
+		return
+	_host_apply_toggle_hold(_get_player_number_for_sender(), index)
+
+
+@rpc("any_peer", "reliable")
+func _rpc_request_lan_score_category(category: String) -> void:
+	if not hosting:
+		return
+	_host_apply_score_category(_get_player_number_for_sender(), category)
+
+
+@rpc("any_peer", "reliable")
+func _rpc_receive_lan_state_snapshot(snapshot: Dictionary) -> void:
+	lan_state_snapshot_received.emit(snapshot)
 
 
 func _is_valid_port(port: int) -> bool:
@@ -227,6 +308,8 @@ func _reset_room_state() -> void:
 	remote_ready = false
 	room_started = false
 	connected_peer_count = 0
+	player_peer_ids = {1: 1, 2: 0}
+	lan_match_controller = null
 	_emit_ready_state_changed()
 	_emit_room_state_changed()
 
@@ -236,9 +319,10 @@ func _on_peer_connected(peer_id: int) -> void:
 		remote_player_number = 2
 		remote_ready = false
 		connected_peer_count += 1
+		player_peer_ids[2] = peer_id
 		rpc_id(peer_id, "_rpc_set_remote_ready", local_ready)
 	peer_connected_to_lobby.emit(peer_id)
-	_emit_status("Peer %d connected. Game sync coming next." % peer_id)
+	_emit_status("Peer %d connected." % peer_id)
 	_emit_ready_state_changed()
 	_emit_room_state_changed()
 
@@ -247,6 +331,9 @@ func _on_peer_disconnected(peer_id: int) -> void:
 	remote_ready = false
 	room_started = false
 	connected_peer_count = max(connected_peer_count - 1, 0)
+	if hosting and player_peer_ids.get(2, 0) == peer_id:
+		player_peer_ids[2] = 0
+	lan_match_controller = null
 	peer_disconnected_from_lobby.emit(peer_id)
 	_emit_status("Peer %d disconnected." % peer_id)
 	_emit_ready_state_changed()
@@ -255,7 +342,7 @@ func _on_peer_disconnected(peer_id: int) -> void:
 
 func _on_connected_to_server() -> void:
 	connected_peer_count = 1
-	_emit_status("Connected. Game sync coming next.")
+	_emit_status("Connected.")
 	_emit_room_state_changed()
 
 
@@ -273,3 +360,56 @@ func _on_server_disconnected() -> void:
 	current_host_port = 0
 	_reset_room_state()
 	_emit_status("Server disconnected.")
+
+
+func _ensure_lan_match_controller() -> bool:
+	if lan_match_controller == null:
+		if not hosting:
+			return false
+		lan_match_controller = LanMatchControllerScript.new()
+		lan_match_controller.new_match()
+	return true
+
+
+func _broadcast_lan_snapshot() -> void:
+	if not hosting or not _ensure_lan_match_controller():
+		return
+	var snapshot: Dictionary = lan_match_controller.get_snapshot()
+	lan_state_snapshot_received.emit(snapshot)
+	rpc("_rpc_receive_lan_state_snapshot", snapshot)
+
+
+func _host_apply_roll(player_number: int) -> void:
+	if not _ensure_lan_match_controller():
+		return
+	if lan_match_controller.apply_roll_for_player(player_number):
+		_broadcast_lan_snapshot()
+	else:
+		_emit_status("Roll ignored: not this player's turn.")
+
+
+func _host_apply_toggle_hold(player_number: int, index: int) -> void:
+	if not _ensure_lan_match_controller():
+		return
+	if lan_match_controller.apply_toggle_hold_for_player(player_number, index):
+		_broadcast_lan_snapshot()
+	else:
+		_emit_status("Hold ignored: not allowed right now.")
+
+
+func _host_apply_score_category(player_number: int, category: String) -> void:
+	if not _ensure_lan_match_controller():
+		return
+	if lan_match_controller.apply_score_for_player(player_number, category):
+		_broadcast_lan_snapshot()
+	else:
+		_emit_status("Score ignored: not allowed right now.")
+
+
+func _get_player_number_for_sender() -> int:
+	var sender_id: int = multiplayer.get_remote_sender_id()
+	if sender_id == 0 or sender_id == player_peer_ids.get(1, 1):
+		return 1
+	if sender_id == player_peer_ids.get(2, 0):
+		return 2
+	return 0

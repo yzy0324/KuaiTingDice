@@ -238,7 +238,7 @@ func _on_ready_state_changed(_local_ready: bool, _remote_ready: bool) -> void:
 
 func _on_lan_match_start_requested() -> void:
 	if match_status_label:
-		match_status_label.text = "LAN match started. Game sync coming next."
+		match_status_label.text = "LAN match started."
 	_refresh_room_state_ui()
 
 
@@ -308,8 +308,8 @@ func _refresh_room_state_ui() -> void:
 			start_match_button.disabled = true
 
 	if room_started:
-		match_status_label.text = "LAN match started. Game sync coming next."
-	elif match_status_label.text == "LAN match started. Game sync coming next.":
+		match_status_label.text = "LAN match started."
+	elif match_status_label.text == "LAN match started.":
 		match_status_label.text = ""
 
 

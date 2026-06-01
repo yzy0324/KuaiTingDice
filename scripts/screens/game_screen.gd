@@ -4,6 +4,7 @@ extends Control
 signal back_to_menu_requested
 signal game_finished(final_score: int, upper_score: int, lower_score: int, used_count: int)
 signal local_two_player_finished(player_1_score: int, player_2_score: int, winner_text: String)
+signal lan_match_finished(player_1_score: int, player_2_score: int, winner_text: String)
 
 const GameControllerScript = preload("res://scripts/core/game_controller.gd")
 const LocalTwoPlayerControllerScript = preload("res://scripts/core/local_two_player_controller.gd")
@@ -52,6 +53,9 @@ var display_font: Font
 var ui_font: Font
 var result_emitted: bool = false
 var audio_manager: Node
+var network_manager: Node
+var lan_snapshot: Dictionary = {}
+var lan_snapshot_connected: bool = false
 
 
 func _ready() -> void:
@@ -368,6 +372,8 @@ func _build_ui() -> void:
 func start_new_game() -> void:
 	if game_mode == "local_two_player":
 		start_local_two_player_game()
+	elif game_mode == "lan_multiplayer":
+		_refresh_ui()
 	else:
 		start_single_player_game()
 
@@ -392,9 +398,31 @@ func start_local_two_player_game() -> void:
 	_refresh_ui()
 
 
+func start_lan_multiplayer_game(manager: Node) -> void:
+	game_mode = "lan_multiplayer"
+	network_manager = manager
+	lan_snapshot = {}
+	is_animating = false
+	result_emitted = false
+	if network_manager and not lan_snapshot_connected:
+		network_manager.connect("lan_state_snapshot_received", _on_lan_state_snapshot_received)
+		lan_snapshot_connected = true
+	_refresh_ui()
+	if network_manager and network_manager.has_method("request_lan_state_snapshot"):
+		network_manager.call("request_lan_state_snapshot")
+
+
 func _on_roll_pressed() -> void:
 	if is_animating:
 		return
+	if game_mode == "lan_multiplayer":
+		if not _can_lan_local_act():
+			return
+		_play_audio("play_roll")
+		if network_manager and network_manager.has_method("request_lan_roll"):
+			network_manager.call("request_lan_roll")
+		return
+
 	var active_controller = _get_active_controller()
 	if not active_controller.can_roll():
 		return
@@ -419,6 +447,17 @@ func _on_roll_pressed() -> void:
 
 
 func _on_dice_pressed(index: int) -> void:
+	if game_mode == "lan_multiplayer":
+		if not _can_lan_local_act():
+			return
+		var active_player: Dictionary = _get_lan_active_player_snapshot()
+		if int(active_player.get("rolls_used", 0)) == 0:
+			return
+		_play_audio("play_hold")
+		if network_manager and network_manager.has_method("request_lan_toggle_hold"):
+			network_manager.call("request_lan_toggle_hold", index)
+		return
+
 	var active_controller = _get_active_controller()
 	if is_animating or active_controller.is_game_over():
 		return
@@ -430,6 +469,9 @@ func _on_dice_pressed(index: int) -> void:
 
 
 func _on_category_pressed(category: String) -> void:
+	if game_mode == "lan_multiplayer":
+		_on_lan_category_pressed(category)
+		return
 	if game_mode == "local_two_player":
 		_on_local_category_pressed(category, local_two_player_controller.get_active_player_index())
 		return
@@ -445,6 +487,10 @@ func _on_category_pressed(category: String) -> void:
 
 
 func _on_local_category_pressed(category: String, player_index: int) -> void:
+	if game_mode == "lan_multiplayer":
+		if player_index == int(lan_snapshot.get("active_player_index", 0)):
+			_on_lan_category_pressed(category)
+		return
 	if game_mode != "local_two_player" or local_two_player_controller == null:
 		return
 	if player_index != local_two_player_controller.get_active_player_index():
@@ -464,6 +510,21 @@ func _on_local_category_pressed(category: String, player_index: int) -> void:
 	else:
 		local_two_player_controller.switch_turn()
 		_refresh_ui()
+
+
+func _on_lan_category_pressed(category: String) -> void:
+	if not _can_lan_local_act():
+		return
+	var active_player: Dictionary = _get_lan_active_player_snapshot()
+	var used_categories: Dictionary = active_player.get("used_categories", {})
+	if used_categories.has(category):
+		return
+	if int(active_player.get("rolls_used", 0)) == 0:
+		return
+
+	_play_audio("play_score")
+	if network_manager and network_manager.has_method("request_lan_score_category"):
+		network_manager.call("request_lan_score_category", category)
 
 
 func _on_new_game_pressed() -> void:
@@ -508,6 +569,17 @@ func _emit_local_two_player_finished_if_needed() -> void:
 	)
 
 
+func _emit_lan_match_finished_if_needed() -> void:
+	if result_emitted or lan_snapshot.is_empty() or not bool(lan_snapshot.get("match_over", false)):
+		return
+	result_emitted = true
+	lan_match_finished.emit(
+		int(lan_snapshot.get("player_1_score", 0)),
+		int(lan_snapshot.get("player_2_score", 0)),
+		String(lan_snapshot.get("winner_text", "Draw"))
+	)
+
+
 func _get_active_controller():
 	if game_mode == "local_two_player" and local_two_player_controller != null:
 		return local_two_player_controller.get_active_controller()
@@ -533,9 +605,18 @@ func _apply_ui_font(control: Control) -> void:
 
 
 func _refresh_ui() -> void:
+	if game_mode == "lan_multiplayer":
+		_refresh_lan_ui()
+		return
+
 	var active_controller = _get_active_controller()
 	if active_controller == null:
 		return
+
+	if game_mode == "local_two_player":
+		title_label.text = "Local Two Player"
+	else:
+		title_label.text = "快艇骰子"
 
 	var rolls_left: int = MAX_ROLLS_PER_ROUND - int(active_controller.state.rolls_used)
 	if game_mode == "local_two_player" and local_two_player_controller != null:
@@ -661,10 +742,144 @@ func _refresh_local_score_table() -> void:
 				button.add_theme_stylebox_override("disabled", _make_local_cell_style(false, false))
 
 
+func _refresh_lan_ui() -> void:
+	if single_score_panel:
+		single_score_panel.visible = false
+	if local_score_panel:
+		local_score_panel.visible = true
+
+	title_label.text = "LAN Multiplayer"
+	if lan_snapshot.is_empty():
+		info_label.text = "Waiting for host snapshot..."
+		rolls_left_label.text = "Connected LAN match"
+		roll_button.text = "ROLL"
+		roll_button.disabled = true
+		for i in range(DICE_COUNT):
+			_update_die_visual(i, 1, false)
+			dice_buttons[i].disabled = true
+			_apply_dice_button_style(dice_buttons[i], false)
+		_refresh_lan_score_table()
+		game_over_label.visible = false
+		return
+
+	var active_player: Dictionary = _get_lan_active_player_snapshot()
+	var local_player_number: int = _get_lan_local_player_number()
+	var active_player_number: int = int(lan_snapshot.get("active_player_number", 1))
+	var local_can_act: bool = _can_lan_local_act()
+	var rolls_left: int = MAX_ROLLS_PER_ROUND - int(active_player.get("rolls_used", 0))
+	var p1_score: int = int(lan_snapshot.get("player_1_score", 0))
+	var p2_score: int = int(lan_snapshot.get("player_2_score", 0))
+
+	info_label.text = "You are Player %d      Current Turn: Player %d      P1: %d      P2: %d" % [
+		local_player_number,
+		active_player_number,
+		p1_score,
+		p2_score
+	]
+	rolls_left_label.text = "Rolls Left: %d" % rolls_left
+	roll_button.text = "ROLL (%d left)" % rolls_left
+	roll_button.disabled = is_animating or (not local_can_act) or rolls_left <= 0
+
+	var dice_values: Array = active_player.get("dice_values", [1, 1, 1, 1, 1])
+	var held_values: Array = active_player.get("held", [false, false, false, false, false])
+	for i in range(DICE_COUNT):
+		var held: bool = bool(held_values[i])
+		_update_die_visual(i, int(dice_values[i]), held)
+		dice_buttons[i].disabled = is_animating or (not local_can_act) or int(active_player.get("rolls_used", 0)) == 0
+		_apply_dice_button_style(dice_buttons[i], held)
+
+	_refresh_lan_score_table()
+
+	if bool(lan_snapshot.get("match_over", false)):
+		game_over_label.visible = true
+		game_over_label.text = "LAN Match Over! %s" % String(lan_snapshot.get("winner_text", "Draw"))
+		_emit_lan_match_finished_if_needed()
+	else:
+		game_over_label.visible = false
+		game_over_label.text = ""
+
+
+func _refresh_lan_score_table() -> void:
+	if local_player_buttons.size() < 2:
+		return
+
+	var players: Array = lan_snapshot.get("players", [])
+	var active_index: int = int(lan_snapshot.get("active_player_index", 0))
+	var local_can_act: bool = _can_lan_local_act()
+
+	for player_index in range(2):
+		var player_data: Dictionary = {}
+		if player_index < players.size() and typeof(players[player_index]) == TYPE_DICTIONARY:
+			player_data = players[player_index]
+
+		var used_categories: Dictionary = player_data.get("used_categories", {})
+		var scores: Dictionary = player_data.get("scores", {})
+		var preview_scores: Dictionary = player_data.get("preview_scores", {})
+		var rolls_used: int = int(player_data.get("rolls_used", 0))
+
+		for category in CATEGORIES:
+			var button: Button = local_player_buttons[player_index][category]
+			var is_active: bool = player_index == active_index
+			var used: bool = used_categories.has(category)
+
+			if used:
+				button.text = "%d USED" % int(scores.get(category, 0))
+				button.disabled = true
+				button.add_theme_color_override("font_disabled_color", Color(0.72, 0.69, 0.62, 0.95))
+				button.add_theme_stylebox_override("normal", _make_local_cell_style(is_active, true))
+				button.add_theme_stylebox_override("disabled", _make_local_cell_style(is_active, true))
+			elif is_active:
+				button.text = "%d" % int(preview_scores.get(category, 0))
+				button.disabled = (not local_can_act) or rolls_used == 0 or bool(lan_snapshot.get("match_over", false))
+				button.add_theme_color_override("font_color", Color(0.95, 0.93, 0.86, 1.0))
+				button.add_theme_color_override("font_disabled_color", Color(0.62, 0.61, 0.56, 0.95))
+				button.add_theme_stylebox_override("normal", _make_local_cell_style(true, false))
+				button.add_theme_stylebox_override("hover", _make_std_button_style(Color(0.13, 0.14, 0.12, 0.98), Color(0.50, 0.62, 0.36, 0.95)))
+				button.add_theme_stylebox_override("pressed", _make_std_button_style(Color(0.06, 0.07, 0.06, 1.0), Color(0.34, 0.45, 0.24, 0.95)))
+				button.add_theme_stylebox_override("disabled", _make_local_cell_style(true, false))
+			else:
+				button.text = "-"
+				button.disabled = true
+				button.add_theme_color_override("font_disabled_color", Color(0.45, 0.44, 0.40, 0.9))
+				button.add_theme_stylebox_override("normal", _make_local_cell_style(false, false))
+				button.add_theme_stylebox_override("disabled", _make_local_cell_style(false, false))
+
+
 func _is_current_game_over() -> bool:
+	if game_mode == "lan_multiplayer":
+		return bool(lan_snapshot.get("match_over", false))
 	if game_mode == "local_two_player" and local_two_player_controller != null:
 		return local_two_player_controller.is_match_over()
 	return game_controller != null and game_controller.is_game_over()
+
+
+func _on_lan_state_snapshot_received(snapshot: Dictionary) -> void:
+	lan_snapshot = snapshot.duplicate(true)
+	is_animating = false
+	rolling_indices.clear()
+	_refresh_ui()
+
+
+func _get_lan_active_player_snapshot() -> Dictionary:
+	var players: Array = lan_snapshot.get("players", [])
+	var active_index: int = int(lan_snapshot.get("active_player_index", 0))
+	if active_index >= 0 and active_index < players.size() and typeof(players[active_index]) == TYPE_DICTIONARY:
+		return players[active_index]
+	return {}
+
+
+func _get_lan_local_player_number() -> int:
+	if network_manager == null:
+		return 0
+	return int(network_manager.get("local_player_number"))
+
+
+func _can_lan_local_act() -> bool:
+	if is_animating or network_manager == null or lan_snapshot.is_empty():
+		return false
+	if bool(lan_snapshot.get("match_over", false)):
+		return false
+	return _get_lan_local_player_number() == int(lan_snapshot.get("active_player_number", 1))
 
 
 func _make_used_category_style() -> StyleBoxFlat:

@@ -31,6 +31,7 @@ func _ready() -> void:
 	add_child(audio_manager)
 	network_manager = NetworkManagerScript.new()
 	add_child(network_manager)
+	network_manager.lan_match_start_requested.connect(_on_lan_match_start_requested)
 	if audio_manager.has_method("set_sfx_volume_linear"):
 		audio_manager.call("set_sfx_volume_linear", float(save_manager.call("get_sfx_volume")))
 	if audio_manager.has_method("set_muted"):
@@ -63,6 +64,7 @@ func _build_screens() -> void:
 	game_screen.back_to_menu_requested.connect(_on_back_to_menu_pressed)
 	game_screen.game_finished.connect(_on_game_finished)
 	game_screen.local_two_player_finished.connect(_on_local_two_player_finished)
+	game_screen.lan_match_finished.connect(_on_lan_match_finished)
 	if game_screen.has_method("set_audio_manager"):
 		game_screen.set_audio_manager(audio_manager)
 	add_child(game_screen)
@@ -173,8 +175,8 @@ func _on_start_game_pressed() -> void:
 func _on_single_player_requested() -> void:
 	current_mode = "single_player"
 	_show_game_screen()
-	if game_screen.has_method("start_new_game"):
-		game_screen.start_new_game()
+	if game_screen.has_method("start_single_player_game"):
+		game_screen.start_single_player_game()
 
 
 func _on_local_two_player_requested() -> void:
@@ -197,7 +199,16 @@ func _on_lan_lobby_back_requested() -> void:
 	_show_mode_select_screen()
 
 
+func _on_lan_match_start_requested() -> void:
+	current_mode = "lan_multiplayer"
+	_show_game_screen()
+	if game_screen.has_method("start_lan_multiplayer_game"):
+		game_screen.start_lan_multiplayer_game(network_manager)
+
+
 func _on_back_to_menu_pressed() -> void:
+	if current_mode == "lan_multiplayer" and network_manager and network_manager.has_method("disconnect_from_game"):
+		network_manager.call("disconnect_from_game")
 	if game_screen.has_method("start_new_game"):
 		game_screen.start_new_game()
 	_show_start_menu()
@@ -230,7 +241,22 @@ func _on_local_two_player_finished(player_1_score: int, player_2_score: int, win
 	_show_result_screen()
 
 
+func _on_lan_match_finished(player_1_score: int, player_2_score: int, winner_text: String) -> void:
+	if audio_manager and audio_manager.has_method("play_game_over"):
+		audio_manager.play_game_over()
+	if result_screen and result_screen.has_method("show_lan_result"):
+		result_screen.show_lan_result(player_1_score, player_2_score, winner_text)
+	elif result_screen and result_screen.has_method("show_local_two_player_result"):
+		result_screen.show_local_two_player_result(player_1_score, player_2_score, winner_text)
+	_show_result_screen()
+
+
 func _on_play_again_pressed() -> void:
+	if current_mode == "lan_multiplayer":
+		if network_manager and network_manager.has_method("disconnect_from_game"):
+			network_manager.call("disconnect_from_game")
+		_show_lan_lobby_screen()
+		return
 	_show_game_screen()
 	if current_mode == "local_two_player" and game_screen.has_method("start_local_two_player_game"):
 		game_screen.start_local_two_player_game()
@@ -239,6 +265,8 @@ func _on_play_again_pressed() -> void:
 
 
 func _on_result_back_to_menu_pressed() -> void:
+	if current_mode == "lan_multiplayer" and network_manager and network_manager.has_method("disconnect_from_game"):
+		network_manager.call("disconnect_from_game")
 	if game_screen.has_method("start_new_game"):
 		game_screen.start_new_game()
 	_show_start_menu()

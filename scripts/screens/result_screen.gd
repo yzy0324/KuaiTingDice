@@ -16,6 +16,8 @@ var lower_score_label: Label
 var used_count_label: Label
 var leaderboard_label: Label
 var message_label: Label
+var play_again_button: Button
+var back_button: Button
 
 
 func _ready() -> void:
@@ -24,6 +26,7 @@ func _ready() -> void:
 
 
 func show_result(final_score: int, upper_score: int, lower_score: int, used_count: int, best_score: int, is_new_record: bool, leaderboard: Array = []) -> void:
+	play_again_button.text = "Play Again"
 	final_score_label.text = "Final Score: %d" % final_score
 	best_score_label.text = "Best Score: %d" % best_score
 	best_score_label.visible = true
@@ -41,6 +44,7 @@ func show_result(final_score: int, upper_score: int, lower_score: int, used_coun
 
 
 func show_local_two_player_result(player_1_score: int, player_2_score: int, winner_text: String) -> void:
+	play_again_button.text = "Play Again"
 	final_score_label.text = "Local Two Player Result"
 	best_score_label.visible = false
 	new_record_label.visible = false
@@ -52,6 +56,13 @@ func show_local_two_player_result(player_1_score: int, player_2_score: int, winn
 	used_count_label.text = "Winner: %s" % winner_text
 	leaderboard_label.visible = false
 	message_label.text = "The table has spoken."
+
+
+func show_lan_result(player_1_score: int, player_2_score: int, winner_text: String) -> void:
+	show_local_two_player_result(player_1_score, player_2_score, winner_text)
+	play_again_button.text = "Return to Lobby"
+	final_score_label.text = "LAN Multiplayer Result"
+	message_label.text = "LAN sync complete. Return to the lobby for another match."
 
 
 func _build_ui() -> void:
@@ -142,11 +153,11 @@ func _build_ui() -> void:
 	buttons.add_theme_constant_override("separation", 18)
 	layout.add_child(buttons)
 
-	var play_again_button := _make_button("Play Again")
+	play_again_button = _make_button("Play Again")
 	play_again_button.pressed.connect(_on_play_again_pressed)
 	buttons.add_child(play_again_button)
 
-	var back_button := _make_button("Back to Menu")
+	back_button = _make_button("Back to Menu")
 	back_button.pressed.connect(_on_back_to_menu_pressed)
 	buttons.add_child(back_button)
 
