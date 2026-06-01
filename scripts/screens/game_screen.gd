@@ -2,6 +2,7 @@ class_name GameScreen
 extends Control
 
 signal back_to_menu_requested
+signal game_finished(final_score: int, upper_score: int, lower_score: int, used_count: int)
 
 const GameControllerScript = preload("res://scripts/core/game_controller.gd")
 
@@ -42,6 +43,7 @@ var warned_missing_assets: Dictionary = {}
 var rolling_indices: Dictionary = {}
 var display_font: Font
 var ui_font: Font
+var result_emitted: bool = false
 
 
 func _ready() -> void:
@@ -322,6 +324,7 @@ func start_new_game() -> void:
 		game_controller = GameControllerScript.new()
 	game_controller.new_game()
 	is_animating = false
+	result_emitted = false
 	_refresh_ui()
 
 
@@ -365,6 +368,7 @@ func _on_category_pressed(category: String) -> void:
 		return
 	game_controller.score_category(category)
 	_refresh_ui()
+	_emit_game_finished_if_needed()
 
 
 func _on_new_game_pressed() -> void:
@@ -373,6 +377,26 @@ func _on_new_game_pressed() -> void:
 
 func _on_back_to_menu_pressed() -> void:
 	back_to_menu_requested.emit()
+
+
+func _emit_game_finished_if_needed() -> void:
+	if result_emitted or not game_controller.is_game_over():
+		return
+	result_emitted = true
+	game_finished.emit(
+		game_controller.get_total_score(),
+		_get_section_score(UPPER_CATEGORIES),
+		_get_section_score(LOWER_CATEGORIES),
+		game_controller.state.get_used_category_count()
+	)
+
+
+func _get_section_score(categories: Array) -> int:
+	var total := 0
+	for category in categories:
+		if game_controller.state.scores.has(category):
+			total += int(game_controller.state.scores[category])
+	return total
 
 
 func _apply_display_font(control: Control) -> void:

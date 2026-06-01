@@ -2,10 +2,12 @@ extends Control
 
 const StartMenuScript = preload("res://scripts/screens/start_menu.gd")
 const GameScreenScript = preload("res://scripts/screens/game_screen.gd")
+const ResultScreenScript = preload("res://scripts/screens/result_screen.gd")
 const ScoringTestsScript = preload("res://scripts/tests/scoring_tests.gd")
 
 var start_menu: Control
 var game_screen: Control
+var result_screen: Control
 
 
 func _ready() -> void:
@@ -24,8 +26,15 @@ func _build_screens() -> void:
 
 	game_screen = GameScreenScript.new()
 	game_screen.back_to_menu_requested.connect(_on_back_to_menu_pressed)
+	game_screen.game_finished.connect(_on_game_finished)
 	add_child(game_screen)
 	_force_full_rect(game_screen)
+
+	result_screen = ResultScreenScript.new()
+	result_screen.play_again_requested.connect(_on_play_again_pressed)
+	result_screen.back_to_menu_requested.connect(_on_result_back_to_menu_pressed)
+	add_child(result_screen)
+	_force_full_rect(result_screen)
 
 
 func _force_full_rect(control: Control) -> void:
@@ -44,6 +53,8 @@ func _show_start_menu() -> void:
 		start_menu.visible = true
 	if game_screen:
 		game_screen.visible = false
+	if result_screen:
+		result_screen.visible = false
 
 
 func _show_game_screen() -> void:
@@ -52,6 +63,18 @@ func _show_game_screen() -> void:
 	if game_screen:
 		_force_full_rect(game_screen)
 		game_screen.visible = true
+	if result_screen:
+		result_screen.visible = false
+
+
+func _show_result_screen() -> void:
+	if start_menu:
+		start_menu.visible = false
+	if game_screen:
+		game_screen.visible = false
+	if result_screen:
+		_force_full_rect(result_screen)
+		result_screen.visible = true
 
 
 func _on_start_game_pressed() -> void:
@@ -61,6 +84,24 @@ func _on_start_game_pressed() -> void:
 
 
 func _on_back_to_menu_pressed() -> void:
+	if game_screen.has_method("start_new_game"):
+		game_screen.start_new_game()
+	_show_start_menu()
+
+
+func _on_game_finished(final_score: int, upper_score: int, lower_score: int, used_count: int) -> void:
+	if result_screen and result_screen.has_method("show_result"):
+		result_screen.show_result(final_score, upper_score, lower_score, used_count)
+	_show_result_screen()
+
+
+func _on_play_again_pressed() -> void:
+	_show_game_screen()
+	if game_screen.has_method("start_new_game"):
+		game_screen.start_new_game()
+
+
+func _on_result_back_to_menu_pressed() -> void:
 	if game_screen.has_method("start_new_game"):
 		game_screen.start_new_game()
 	_show_start_menu()
