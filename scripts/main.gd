@@ -1,6 +1,7 @@
 extends Control
 
 const StartMenuScript = preload("res://scripts/screens/start_menu.gd")
+const ModeSelectScreenScript = preload("res://scripts/screens/mode_select_screen.gd")
 const GameScreenScript = preload("res://scripts/screens/game_screen.gd")
 const ResultScreenScript = preload("res://scripts/screens/result_screen.gd")
 const SaveManagerScript = preload("res://scripts/managers/save_manager.gd")
@@ -8,10 +9,12 @@ const AudioManagerScript = preload("res://scripts/managers/audio_manager.gd")
 const ScoringTestsScript = preload("res://scripts/tests/scoring_tests.gd")
 
 var start_menu: Control
+var mode_select_screen: Control
 var game_screen: Control
 var result_screen: Control
 var save_manager: RefCounted
 var audio_manager: Node
+var current_mode := "single_player"
 
 
 func _ready() -> void:
@@ -40,9 +43,20 @@ func _build_screens() -> void:
 	add_child(start_menu)
 	_force_full_rect(start_menu)
 
+	mode_select_screen = ModeSelectScreenScript.new()
+	mode_select_screen.single_player_requested.connect(_on_single_player_requested)
+	mode_select_screen.local_two_player_requested.connect(_on_local_two_player_requested)
+	mode_select_screen.lan_multiplayer_requested.connect(_on_lan_multiplayer_requested)
+	mode_select_screen.back_requested.connect(_on_mode_select_back_requested)
+	if mode_select_screen.has_method("set_audio_manager"):
+		mode_select_screen.set_audio_manager(audio_manager)
+	add_child(mode_select_screen)
+	_force_full_rect(mode_select_screen)
+
 	game_screen = GameScreenScript.new()
 	game_screen.back_to_menu_requested.connect(_on_back_to_menu_pressed)
 	game_screen.game_finished.connect(_on_game_finished)
+	game_screen.local_two_player_finished.connect(_on_local_two_player_finished)
 	if game_screen.has_method("set_audio_manager"):
 		game_screen.set_audio_manager(audio_manager)
 	add_child(game_screen)
@@ -73,6 +87,20 @@ func _show_start_menu() -> void:
 		start_menu.visible = true
 	if game_screen:
 		game_screen.visible = false
+	if mode_select_screen:
+		mode_select_screen.visible = false
+	if result_screen:
+		result_screen.visible = false
+
+
+func _show_mode_select_screen() -> void:
+	if start_menu:
+		start_menu.visible = false
+	if mode_select_screen:
+		_force_full_rect(mode_select_screen)
+		mode_select_screen.visible = true
+	if game_screen:
+		game_screen.visible = false
 	if result_screen:
 		result_screen.visible = false
 
@@ -80,6 +108,8 @@ func _show_start_menu() -> void:
 func _show_game_screen() -> void:
 	if start_menu:
 		start_menu.visible = false
+	if mode_select_screen:
+		mode_select_screen.visible = false
 	if game_screen:
 		_force_full_rect(game_screen)
 		game_screen.visible = true
@@ -90,6 +120,8 @@ func _show_game_screen() -> void:
 func _show_result_screen() -> void:
 	if start_menu:
 		start_menu.visible = false
+	if mode_select_screen:
+		mode_select_screen.visible = false
 	if game_screen:
 		game_screen.visible = false
 	if result_screen:
@@ -98,9 +130,29 @@ func _show_result_screen() -> void:
 
 
 func _on_start_game_pressed() -> void:
+	_show_mode_select_screen()
+
+
+func _on_single_player_requested() -> void:
+	current_mode = "single_player"
 	_show_game_screen()
 	if game_screen.has_method("start_new_game"):
 		game_screen.start_new_game()
+
+
+func _on_local_two_player_requested() -> void:
+	current_mode = "local_two_player"
+	_show_game_screen()
+	if game_screen.has_method("start_local_two_player_game"):
+		game_screen.start_local_two_player_game()
+
+
+func _on_lan_multiplayer_requested() -> void:
+	current_mode = "lan_multiplayer"
+
+
+func _on_mode_select_back_requested() -> void:
+	_show_start_menu()
 
 
 func _on_back_to_menu_pressed() -> void:
@@ -110,21 +162,38 @@ func _on_back_to_menu_pressed() -> void:
 
 
 func _on_game_finished(final_score: int, upper_score: int, lower_score: int, used_count: int) -> void:
-	var is_new_record: bool = save_manager.submit_score(final_score)
+	var is_new_record: bool = false
+	if current_mode == "single_player" and save_manager.has_method("submit_single_player_score"):
+		is_new_record = bool(save_manager.call("submit_single_player_score", final_score))
+	else:
+		is_new_record = save_manager.submit_score(final_score)
 	var best_score: int = save_manager.get_best_score()
+	var leaderboard: Array = []
+	if save_manager.has_method("get_single_player_leaderboard"):
+		leaderboard = save_manager.call("get_single_player_leaderboard")
 	if audio_manager and audio_manager.has_method("play_game_over"):
 		audio_manager.play_game_over()
 	if is_new_record and audio_manager and audio_manager.has_method("play_new_record"):
 		audio_manager.play_new_record()
 	if result_screen and result_screen.has_method("show_result"):
-		result_screen.show_result(final_score, upper_score, lower_score, used_count, best_score, is_new_record)
+		result_screen.show_result(final_score, upper_score, lower_score, used_count, best_score, is_new_record, leaderboard)
+	_show_result_screen()
+
+
+func _on_local_two_player_finished(player_1_score: int, player_2_score: int, winner_text: String) -> void:
+	if audio_manager and audio_manager.has_method("play_game_over"):
+		audio_manager.play_game_over()
+	if result_screen and result_screen.has_method("show_local_two_player_result"):
+		result_screen.show_local_two_player_result(player_1_score, player_2_score, winner_text)
 	_show_result_screen()
 
 
 func _on_play_again_pressed() -> void:
 	_show_game_screen()
-	if game_screen.has_method("start_new_game"):
-		game_screen.start_new_game()
+	if current_mode == "local_two_player" and game_screen.has_method("start_local_two_player_game"):
+		game_screen.start_local_two_player_game()
+	elif game_screen.has_method("start_single_player_game"):
+		game_screen.start_single_player_game()
 
 
 func _on_result_back_to_menu_pressed() -> void:

@@ -3,13 +3,15 @@ extends Control
 
 signal back_to_menu_requested
 signal game_finished(final_score: int, upper_score: int, lower_score: int, used_count: int)
+signal local_two_player_finished(player_1_score: int, player_2_score: int, winner_text: String)
 
 const GameControllerScript = preload("res://scripts/core/game_controller.gd")
+const LocalTwoPlayerControllerScript = preload("res://scripts/core/local_two_player_controller.gd")
 
-const DICE_COUNT := 5
-const MAX_ROLLS_PER_ROUND := 3
-const UPPER_CATEGORIES := ["Ones", "Twos", "Threes", "Fours", "Fives", "Sixes"]
-const LOWER_CATEGORIES := [
+const DICE_COUNT = 5
+const MAX_ROLLS_PER_ROUND = 3
+const UPPER_CATEGORIES = ["Ones", "Twos", "Threes", "Fours", "Fives", "Sixes"]
+const LOWER_CATEGORIES = [
 	"Three of a Kind",
 	"Four of a Kind",
 	"Full House",
@@ -18,9 +20,11 @@ const LOWER_CATEGORIES := [
 	"Yahtzee",
 	"Chance"
 ]
-const CATEGORIES := UPPER_CATEGORIES + LOWER_CATEGORIES
+const CATEGORIES = UPPER_CATEGORIES + LOWER_CATEGORIES
 
-var game_controller: RefCounted
+var game_controller
+var local_two_player_controller
+var game_mode: String = "single_player"
 var is_animating: bool = false
 
 var title_label: Label
@@ -30,11 +34,14 @@ var game_over_label: Label
 var roll_button: Button
 var new_game_button: Button
 var back_button: Button
+var single_score_panel: PanelContainer
+var local_score_panel: PanelContainer
 var dice_buttons: Array[Button] = []
 var dice_face_rects: Array[TextureRect] = []
 var dice_hold_overlays: Array[TextureRect] = []
 var dice_value_labels: Array[Label] = []
 var category_buttons: Dictionary = {}
+var local_player_buttons: Array = []
 var dice_face_textures: Array[Texture2D] = []
 var dice_blur_texture: Texture2D
 var dice_shadow_texture: Texture2D
@@ -62,6 +69,7 @@ func _build_ui() -> void:
 	dice_hold_overlays.clear()
 	dice_value_labels.clear()
 	category_buttons.clear()
+	local_player_buttons = [{}, {}]
 	display_font = _load_font("res://assets/fonts/display_font.ttf")
 	ui_font = _load_font("res://assets/fonts/ui_font.ttf")
 	_load_dice_assets()
@@ -211,16 +219,16 @@ func _build_ui() -> void:
 	roll_button.pressed.connect(_on_roll_pressed)
 	dice_layout.add_child(roll_button)
 
-	var score_panel := PanelContainer.new()
-	score_panel.custom_minimum_size = Vector2(980, 0)
-	score_panel.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	score_panel.add_theme_stylebox_override("panel", _make_score_panel_style())
-	root_layout.add_child(score_panel)
+	single_score_panel = PanelContainer.new()
+	single_score_panel.custom_minimum_size = Vector2(980, 0)
+	single_score_panel.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	single_score_panel.add_theme_stylebox_override("panel", _make_score_panel_style())
+	root_layout.add_child(single_score_panel)
 
 	var score_area := HBoxContainer.new()
 	score_area.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	score_area.add_theme_constant_override("separation", 18)
-	score_panel.add_child(score_area)
+	single_score_panel.add_child(score_area)
 
 	var upper_section := PanelContainer.new()
 	upper_section.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -278,6 +286,43 @@ func _build_ui() -> void:
 		category_buttons[category] = lower_button
 		lower_layout.add_child(lower_button)
 
+	local_score_panel = PanelContainer.new()
+	local_score_panel.custom_minimum_size = Vector2(1020, 0)
+	local_score_panel.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	local_score_panel.add_theme_stylebox_override("panel", _make_score_panel_style())
+	local_score_panel.visible = false
+	root_layout.add_child(local_score_panel)
+
+	var table_layout := GridContainer.new()
+	table_layout.columns = 3
+	table_layout.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	table_layout.add_theme_constant_override("h_separation", 10)
+	table_layout.add_theme_constant_override("v_separation", 8)
+	local_score_panel.add_child(table_layout)
+
+	_add_table_header(table_layout, "Category")
+	_add_table_header(table_layout, "Player 1")
+	_add_table_header(table_layout, "Player 2")
+
+	for category in CATEGORIES:
+		var category_label := Label.new()
+		category_label.text = category
+		category_label.custom_minimum_size = Vector2(300, 46)
+		category_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		category_label.add_theme_font_size_override("font_size", 20)
+		category_label.add_theme_color_override("font_color", Color(0.9, 0.88, 0.82, 1.0))
+		_apply_ui_font(category_label)
+		table_layout.add_child(category_label)
+
+		for player_index in range(2):
+			var cell_button := Button.new()
+			cell_button.custom_minimum_size = Vector2(280, 46)
+			cell_button.add_theme_font_size_override("font_size", 20)
+			_apply_ui_font(cell_button)
+			cell_button.pressed.connect(_on_local_category_pressed.bind(category, player_index))
+			local_player_buttons[player_index][category] = cell_button
+			table_layout.add_child(cell_button)
+
 	var bottom_buttons := HBoxContainer.new()
 	bottom_buttons.alignment = BoxContainer.ALIGNMENT_CENTER
 	bottom_buttons.add_theme_constant_override("separation", 16)
@@ -321,6 +366,14 @@ func _build_ui() -> void:
 
 
 func start_new_game() -> void:
+	if game_mode == "local_two_player":
+		start_local_two_player_game()
+	else:
+		start_single_player_game()
+
+
+func start_single_player_game() -> void:
+	game_mode = "single_player"
 	if game_controller == null:
 		game_controller = GameControllerScript.new()
 	game_controller.new_game()
@@ -329,13 +382,24 @@ func start_new_game() -> void:
 	_refresh_ui()
 
 
+func start_local_two_player_game() -> void:
+	game_mode = "local_two_player"
+	if local_two_player_controller == null:
+		local_two_player_controller = LocalTwoPlayerControllerScript.new()
+	local_two_player_controller.new_match()
+	is_animating = false
+	result_emitted = false
+	_refresh_ui()
+
+
 func _on_roll_pressed() -> void:
 	if is_animating:
 		return
-	if not game_controller.can_roll():
+	var active_controller = _get_active_controller()
+	if not active_controller.can_roll():
 		return
 
-	var indices_to_roll: Array = game_controller.get_indices_to_roll()
+	var indices_to_roll: Array = active_controller.get_indices_to_roll()
 	if indices_to_roll.is_empty():
 		return
 
@@ -348,23 +412,28 @@ func _on_roll_pressed() -> void:
 		_show_die_blur(idx)
 	_refresh_ui()
 	await get_tree().create_timer(0.12).timeout
-	game_controller.apply_roll_result(indices_to_roll)
+	active_controller.apply_roll_result(indices_to_roll)
 	is_animating = false
 	rolling_indices.clear()
 	_refresh_ui()
 
 
 func _on_dice_pressed(index: int) -> void:
-	if is_animating or game_controller.is_game_over():
+	var active_controller = _get_active_controller()
+	if is_animating or active_controller.is_game_over():
 		return
-	if game_controller.state.rolls_used == 0:
+	if active_controller.state.rolls_used == 0:
 		return
 	_play_audio("play_hold")
-	game_controller.toggle_hold(index)
+	active_controller.toggle_hold(index)
 	_refresh_ui()
 
 
 func _on_category_pressed(category: String) -> void:
+	if game_mode == "local_two_player":
+		_on_local_category_pressed(category, local_two_player_controller.get_active_player_index())
+		return
+
 	if is_animating or game_controller.is_game_over():
 		return
 	if not game_controller.can_score_category(category):
@@ -373,6 +442,28 @@ func _on_category_pressed(category: String) -> void:
 	game_controller.score_category(category)
 	_refresh_ui()
 	_emit_game_finished_if_needed()
+
+
+func _on_local_category_pressed(category: String, player_index: int) -> void:
+	if game_mode != "local_two_player" or local_two_player_controller == null:
+		return
+	if player_index != local_two_player_controller.get_active_player_index():
+		return
+
+	var active_controller = local_two_player_controller.get_active_controller()
+	if is_animating or active_controller.is_game_over():
+		return
+	if not active_controller.can_score_category(category):
+		return
+
+	_play_audio("play_score")
+	active_controller.score_category(category)
+	if local_two_player_controller.is_match_over():
+		_refresh_ui()
+		_emit_local_two_player_finished_if_needed()
+	else:
+		local_two_player_controller.switch_turn()
+		_refresh_ui()
 
 
 func _on_new_game_pressed() -> void:
@@ -406,8 +497,25 @@ func _emit_game_finished_if_needed() -> void:
 	)
 
 
+func _emit_local_two_player_finished_if_needed() -> void:
+	if result_emitted or local_two_player_controller == null or not local_two_player_controller.is_match_over():
+		return
+	result_emitted = true
+	local_two_player_finished.emit(
+		local_two_player_controller.get_player_score(0),
+		local_two_player_controller.get_player_score(1),
+		local_two_player_controller.get_winner_text()
+	)
+
+
+func _get_active_controller():
+	if game_mode == "local_two_player" and local_two_player_controller != null:
+		return local_two_player_controller.get_active_controller()
+	return game_controller
+
+
 func _get_section_score(categories: Array) -> int:
-	var total := 0
+	var total: int = 0
 	for category in categories:
 		if game_controller.state.scores.has(category):
 			total += int(game_controller.state.scores[category])
@@ -425,42 +533,49 @@ func _apply_ui_font(control: Control) -> void:
 
 
 func _refresh_ui() -> void:
-	if game_controller == null:
+	var active_controller = _get_active_controller()
+	if active_controller == null:
 		return
 
-	var rolls_left: int = MAX_ROLLS_PER_ROUND - game_controller.state.rolls_used
-	info_label.text = "Round: %d / 13      Total Score: %d" % [game_controller.state.round_number, game_controller.get_total_score()]
+	var rolls_left: int = MAX_ROLLS_PER_ROUND - int(active_controller.state.rolls_used)
+	if game_mode == "local_two_player" and local_two_player_controller != null:
+		info_label.text = "PLAYER %d TURN      P1 Score: %d      P2 Score: %d" % [
+			local_two_player_controller.get_active_player_number(),
+			local_two_player_controller.get_player_score(0),
+			local_two_player_controller.get_player_score(1)
+		]
+	else:
+		info_label.text = "Round: %d / 13      Total Score: %d" % [active_controller.state.round_number, active_controller.get_total_score()]
 	rolls_left_label.text = "Rolls Left: %d" % rolls_left
 	roll_button.text = "ROLL (%d left)" % rolls_left
-	roll_button.disabled = is_animating or (not game_controller.can_roll())
+	roll_button.disabled = is_animating or (not active_controller.can_roll())
+
+	if single_score_panel:
+		single_score_panel.visible = game_mode == "single_player"
+	if local_score_panel:
+		local_score_panel.visible = game_mode == "local_two_player"
 
 	for i in range(DICE_COUNT):
-		var held: bool = game_controller.state.held[i]
+		var held: bool = bool(active_controller.state.held[i])
 		if is_animating and rolling_indices.has(i):
 			_show_die_blur(i)
 			dice_hold_overlays[i].visible = false
 		else:
-			_update_die_visual(i, game_controller.state.dice_values[i], held)
-		dice_buttons[i].disabled = is_animating or game_controller.is_game_over() or game_controller.state.rolls_used == 0
+			_update_die_visual(i, active_controller.state.dice_values[i], held)
+		dice_buttons[i].disabled = is_animating or active_controller.is_game_over() or active_controller.state.rolls_used == 0
 		_apply_dice_button_style(dice_buttons[i], held)
 
-	for category in CATEGORIES:
-		var button: Button = category_buttons[category]
-		var preview_score: int = game_controller.get_preview_score(category)
-		if game_controller.state.used_categories.has(category):
-			button.text = "%s: %d (USED)" % [category, game_controller.state.scores[category]]
-			button.disabled = true
-			button.add_theme_color_override("font_disabled_color", Color(0.64, 0.62, 0.56, 0.95))
-			button.add_theme_stylebox_override("normal", _make_used_category_style())
-			button.add_theme_stylebox_override("disabled", _make_used_category_style())
-		else:
-			button.text = "%s: %d" % [category, preview_score]
-			button.disabled = is_animating or game_controller.is_game_over() or game_controller.state.rolls_used == 0
-			_apply_category_button_style(button)
+	if game_mode == "local_two_player":
+		_refresh_local_score_table()
+	else:
+		_refresh_single_score_buttons(active_controller)
 
-	if game_controller.is_game_over():
+	if _is_current_game_over():
 		game_over_label.visible = true
-		game_over_label.text = "Game Over! Final Score: %d" % game_controller.get_total_score()
+		if game_mode == "local_two_player" and local_two_player_controller != null:
+			game_over_label.text = "Match Over! %s" % local_two_player_controller.get_winner_text()
+		else:
+			game_over_label.text = "Game Over! Final Score: %d" % active_controller.get_total_score()
 	else:
 		game_over_label.visible = false
 		game_over_label.text = ""
@@ -495,8 +610,87 @@ func _apply_category_button_style(button: Button) -> void:
 	button.add_theme_stylebox_override("disabled", _make_std_button_style(Color(0.06, 0.06, 0.06, 0.7), Color(0.24, 0.24, 0.24, 0.7)))
 
 
+func _refresh_single_score_buttons(controller) -> void:
+	for category in CATEGORIES:
+		var button: Button = category_buttons[category]
+		var preview_score: int = controller.get_preview_score(category)
+		if controller.state.used_categories.has(category):
+			button.text = "%s: %d (USED)" % [category, controller.state.scores[category]]
+			button.disabled = true
+			button.add_theme_color_override("font_disabled_color", Color(0.64, 0.62, 0.56, 0.95))
+			button.add_theme_stylebox_override("normal", _make_used_category_style())
+			button.add_theme_stylebox_override("disabled", _make_used_category_style())
+		else:
+			button.text = "%s: %d" % [category, preview_score]
+			button.disabled = is_animating or controller.is_game_over() or controller.state.rolls_used == 0
+			_apply_category_button_style(button)
+
+
+func _refresh_local_score_table() -> void:
+	if local_two_player_controller == null:
+		return
+
+	var active_index: int = local_two_player_controller.get_active_player_index()
+	for player_index in range(2):
+		var controller = local_two_player_controller.player_controllers[player_index]
+		for category in CATEGORIES:
+			var button: Button = local_player_buttons[player_index][category]
+			var is_active: bool = player_index == active_index
+			var used: bool = bool(controller.state.used_categories.has(category))
+
+			if used:
+				button.text = "%d USED" % int(controller.state.scores[category])
+				button.disabled = true
+				button.add_theme_color_override("font_disabled_color", Color(0.72, 0.69, 0.62, 0.95))
+				button.add_theme_stylebox_override("normal", _make_local_cell_style(is_active, true))
+				button.add_theme_stylebox_override("disabled", _make_local_cell_style(is_active, true))
+			elif is_active:
+				button.text = "%d" % controller.get_preview_score(category)
+				button.disabled = is_animating or controller.is_game_over() or controller.state.rolls_used == 0
+				button.add_theme_color_override("font_color", Color(0.95, 0.93, 0.86, 1.0))
+				button.add_theme_color_override("font_disabled_color", Color(0.62, 0.61, 0.56, 0.95))
+				button.add_theme_stylebox_override("normal", _make_local_cell_style(true, false))
+				button.add_theme_stylebox_override("hover", _make_std_button_style(Color(0.13, 0.14, 0.12, 0.98), Color(0.50, 0.62, 0.36, 0.95)))
+				button.add_theme_stylebox_override("pressed", _make_std_button_style(Color(0.06, 0.07, 0.06, 1.0), Color(0.34, 0.45, 0.24, 0.95)))
+				button.add_theme_stylebox_override("disabled", _make_local_cell_style(true, false))
+			else:
+				button.text = "-"
+				button.disabled = true
+				button.add_theme_color_override("font_disabled_color", Color(0.45, 0.44, 0.40, 0.9))
+				button.add_theme_stylebox_override("normal", _make_local_cell_style(false, false))
+				button.add_theme_stylebox_override("disabled", _make_local_cell_style(false, false))
+
+
+func _is_current_game_over() -> bool:
+	if game_mode == "local_two_player" and local_two_player_controller != null:
+		return local_two_player_controller.is_match_over()
+	return game_controller != null and game_controller.is_game_over()
+
+
 func _make_used_category_style() -> StyleBoxFlat:
 	return _make_std_button_style(Color(0.05, 0.05, 0.05, 0.6), Color(0.22, 0.22, 0.22, 0.6))
+
+
+func _make_local_cell_style(active: bool, used: bool) -> StyleBoxFlat:
+	if used and active:
+		return _make_std_button_style(Color(0.10, 0.10, 0.08, 0.86), Color(0.50, 0.58, 0.34, 0.9))
+	if used:
+		return _make_std_button_style(Color(0.06, 0.06, 0.055, 0.72), Color(0.26, 0.25, 0.21, 0.78))
+	if active:
+		return _make_std_button_style(Color(0.09, 0.12, 0.09, 0.92), Color(0.46, 0.62, 0.34, 0.95))
+	return _make_std_button_style(Color(0.045, 0.047, 0.045, 0.62), Color(0.18, 0.18, 0.16, 0.7))
+
+
+func _add_table_header(parent: Control, text: String) -> void:
+	var label := Label.new()
+	label.text = text
+	label.custom_minimum_size = Vector2(220, 42)
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	label.add_theme_font_size_override("font_size", 22)
+	label.add_theme_color_override("font_color", Color(0.94, 0.92, 0.86, 1.0))
+	_apply_display_font(label)
+	parent.add_child(label)
 
 
 func _load_dice_assets() -> void:

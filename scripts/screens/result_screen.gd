@@ -14,6 +14,7 @@ var new_record_label: Label
 var upper_score_label: Label
 var lower_score_label: Label
 var used_count_label: Label
+var leaderboard_label: Label
 var message_label: Label
 
 
@@ -22,15 +23,35 @@ func _ready() -> void:
 	_build_ui()
 
 
-func show_result(final_score: int, upper_score: int, lower_score: int, used_count: int, best_score: int, is_new_record: bool) -> void:
+func show_result(final_score: int, upper_score: int, lower_score: int, used_count: int, best_score: int, is_new_record: bool, leaderboard: Array = []) -> void:
 	final_score_label.text = "Final Score: %d" % final_score
 	best_score_label.text = "Best Score: %d" % best_score
+	best_score_label.visible = true
 	new_record_label.visible = is_new_record
 	new_record_label.text = "NEW RECORD"
 	upper_score_label.text = "Upper Section: %d" % upper_score
+	upper_score_label.visible = true
 	lower_score_label.text = "Lower Section: %d" % lower_score
+	lower_score_label.visible = true
 	used_count_label.text = "Categories Used: %d / 13" % used_count
+	used_count_label.visible = true
+	leaderboard_label.text = _format_leaderboard(leaderboard)
+	leaderboard_label.visible = true
 	message_label.text = _get_result_message(final_score)
+
+
+func show_local_two_player_result(player_1_score: int, player_2_score: int, winner_text: String) -> void:
+	final_score_label.text = "Local Two Player Result"
+	best_score_label.visible = false
+	new_record_label.visible = false
+	upper_score_label.visible = true
+	upper_score_label.text = "Player 1 Final Score: %d" % player_1_score
+	lower_score_label.visible = true
+	lower_score_label.text = "Player 2 Final Score: %d" % player_2_score
+	used_count_label.visible = true
+	used_count_label.text = "Winner: %s" % winner_text
+	leaderboard_label.visible = false
+	message_label.text = "The table has spoken."
 
 
 func _build_ui() -> void:
@@ -107,6 +128,11 @@ func _build_ui() -> void:
 	used_count_label = _make_result_label(24, false)
 	score_layout.add_child(used_count_label)
 
+	leaderboard_label = _make_result_label(20, false)
+	leaderboard_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	leaderboard_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	score_layout.add_child(leaderboard_label)
+
 	message_label = _make_result_label(24, true)
 	message_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	layout.add_child(message_label)
@@ -178,6 +204,24 @@ func _get_result_message(final_score: int) -> String:
 	if final_score >= 120:
 		return "A solid run. Fortune stayed nearby."
 	return "The dice were hungry tonight."
+
+
+func _format_leaderboard(leaderboard: Array) -> String:
+	if leaderboard.is_empty():
+		return "Local Leaderboard:\nNo scores yet."
+
+	var lines := PackedStringArray(["Local Leaderboard Top 5:"])
+	var count: int = min(leaderboard.size(), 5)
+	for i in range(count):
+		var entry = leaderboard[i]
+		if typeof(entry) != TYPE_DICTIONARY:
+			continue
+		lines.append("%d. %d    %s" % [
+			i + 1,
+			int(entry.get("score", 0)),
+			String(entry.get("date", "Unknown"))
+		])
+	return "\n".join(lines)
 
 
 func _apply_display_font(control: Control) -> void:
