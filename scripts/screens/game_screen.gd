@@ -44,6 +44,7 @@ var rolling_indices: Dictionary = {}
 var display_font: Font
 var ui_font: Font
 var result_emitted: bool = false
+var audio_manager: Node
 
 
 func _ready() -> void:
@@ -338,6 +339,7 @@ func _on_roll_pressed() -> void:
 	if indices_to_roll.is_empty():
 		return
 
+	_play_audio("play_roll")
 	is_animating = true
 	rolling_indices.clear()
 	for index in indices_to_roll:
@@ -357,6 +359,7 @@ func _on_dice_pressed(index: int) -> void:
 		return
 	if game_controller.state.rolls_used == 0:
 		return
+	_play_audio("play_hold")
 	game_controller.toggle_hold(index)
 	_refresh_ui()
 
@@ -366,17 +369,29 @@ func _on_category_pressed(category: String) -> void:
 		return
 	if not game_controller.can_score_category(category):
 		return
+	_play_audio("play_score")
 	game_controller.score_category(category)
 	_refresh_ui()
 	_emit_game_finished_if_needed()
 
 
 func _on_new_game_pressed() -> void:
+	_play_audio("play_button_click")
 	start_new_game()
 
 
 func _on_back_to_menu_pressed() -> void:
+	_play_audio("play_button_click")
 	back_to_menu_requested.emit()
+
+
+func set_audio_manager(manager: Node) -> void:
+	audio_manager = manager
+
+
+func _play_audio(method_name: String) -> void:
+	if audio_manager and audio_manager.has_method(method_name):
+		audio_manager.call(method_name)
 
 
 func _emit_game_finished_if_needed() -> void:

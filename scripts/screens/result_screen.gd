@@ -6,8 +6,11 @@ signal back_to_menu_requested
 
 var display_font: Font
 var ui_font: Font
+var audio_manager: Node
 
 var final_score_label: Label
+var best_score_label: Label
+var new_record_label: Label
 var upper_score_label: Label
 var lower_score_label: Label
 var used_count_label: Label
@@ -19,8 +22,11 @@ func _ready() -> void:
 	_build_ui()
 
 
-func show_result(final_score: int, upper_score: int, lower_score: int, used_count: int) -> void:
+func show_result(final_score: int, upper_score: int, lower_score: int, used_count: int, best_score: int, is_new_record: bool) -> void:
 	final_score_label.text = "Final Score: %d" % final_score
+	best_score_label.text = "Best Score: %d" % best_score
+	new_record_label.visible = is_new_record
+	new_record_label.text = "NEW RECORD"
 	upper_score_label.text = "Upper Section: %d" % upper_score
 	lower_score_label.text = "Lower Section: %d" % lower_score
 	used_count_label.text = "Categories Used: %d / 13" % used_count
@@ -74,6 +80,14 @@ func _build_ui() -> void:
 	final_score_label = _make_result_label(34, true)
 	layout.add_child(final_score_label)
 
+	best_score_label = _make_result_label(28, false)
+	layout.add_child(best_score_label)
+
+	new_record_label = _make_result_label(32, true)
+	new_record_label.add_theme_color_override("font_color", Color(0.62, 0.92, 0.56, 1.0))
+	new_record_label.visible = false
+	layout.add_child(new_record_label)
+
 	var score_panel := PanelContainer.new()
 	score_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	score_panel.add_theme_stylebox_override("panel", _make_inner_panel_style())
@@ -112,11 +126,22 @@ func _build_ui() -> void:
 
 
 func _on_play_again_pressed() -> void:
+	_play_button_click()
 	play_again_requested.emit()
 
 
 func _on_back_to_menu_pressed() -> void:
+	_play_button_click()
 	back_to_menu_requested.emit()
+
+
+func set_audio_manager(manager: Node) -> void:
+	audio_manager = manager
+
+
+func _play_button_click() -> void:
+	if audio_manager and audio_manager.has_method("play_button_click"):
+		audio_manager.play_button_click()
 
 
 func _make_result_label(font_size: int, use_display: bool) -> Label:

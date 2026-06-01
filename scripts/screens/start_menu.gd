@@ -5,6 +5,7 @@ signal start_requested
 
 var display_font: Font
 var ui_font: Font
+var audio_manager: Node
 
 
 func _ready() -> void:
@@ -96,7 +97,17 @@ func _build_ui() -> void:
 
 
 func _on_start_button_pressed() -> void:
+	_play_button_click()
 	start_requested.emit()
+
+
+func set_audio_manager(manager: Node) -> void:
+	audio_manager = manager
+
+
+func _play_button_click() -> void:
+	if audio_manager and audio_manager.has_method("play_button_click"):
+		audio_manager.play_button_click()
 
 
 func _apply_display_font(control: Control) -> void:
