@@ -18,11 +18,19 @@ var leaderboard_label: Label
 var message_label: Label
 var play_again_button: Button
 var back_button: Button
+var content_root: Control
+var content_center: CenterContainer
+var rotate_prompt: Control
 
 
 func _ready() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT, true)
 	_build_ui()
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_RESIZED:
+		_apply_orientation_guard()
 
 
 func show_result(final_score: int, upper_score: int, lower_score: int, used_count: int, best_score: int, is_new_record: bool, leaderboard: Array = []) -> void:
@@ -84,9 +92,19 @@ func _build_ui() -> void:
 	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(bg)
 
+	var scroll := ScrollContainer.new()
+	scroll.set_anchors_preset(Control.PRESET_FULL_RECT, true)
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	add_child(scroll)
+	content_root = scroll
+
 	var center := CenterContainer.new()
-	center.set_anchors_preset(Control.PRESET_FULL_RECT, true)
-	add_child(center)
+	content_center = center
+	center.custom_minimum_size = get_viewport_rect().size
+	center.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	center.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.add_child(center)
 
 	var card := PanelContainer.new()
 	card.custom_minimum_size = Vector2(680, 500)
@@ -109,13 +127,13 @@ func _build_ui() -> void:
 	_apply_display_font(title)
 	layout.add_child(title)
 
-	final_score_label = _make_result_label(34, true)
+	final_score_label = _make_result_label(42, true)
 	layout.add_child(final_score_label)
 
-	best_score_label = _make_result_label(28, false)
+	best_score_label = _make_result_label(32, false)
 	layout.add_child(best_score_label)
 
-	new_record_label = _make_result_label(32, true)
+	new_record_label = _make_result_label(38, true)
 	new_record_label.add_theme_color_override("font_color", Color(0.62, 0.92, 0.56, 1.0))
 	new_record_label.visible = false
 	layout.add_child(new_record_label)
@@ -130,21 +148,21 @@ func _build_ui() -> void:
 	score_layout.add_theme_constant_override("separation", 8)
 	score_panel.add_child(score_layout)
 
-	upper_score_label = _make_result_label(24, false)
+	upper_score_label = _make_result_label(30, false)
 	score_layout.add_child(upper_score_label)
 
-	lower_score_label = _make_result_label(24, false)
+	lower_score_label = _make_result_label(30, false)
 	score_layout.add_child(lower_score_label)
 
-	used_count_label = _make_result_label(24, false)
+	used_count_label = _make_result_label(28, false)
 	score_layout.add_child(used_count_label)
 
-	leaderboard_label = _make_result_label(20, false)
+	leaderboard_label = _make_result_label(22, false)
 	leaderboard_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	leaderboard_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	score_layout.add_child(leaderboard_label)
 
-	message_label = _make_result_label(24, true)
+	message_label = _make_result_label(28, true)
 	message_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	layout.add_child(message_label)
 
@@ -160,6 +178,9 @@ func _build_ui() -> void:
 	back_button = _make_button("Back to Menu")
 	back_button.pressed.connect(_on_back_to_menu_pressed)
 	buttons.add_child(back_button)
+
+	_add_rotate_prompt()
+	_apply_orientation_guard()
 
 
 func _on_play_again_pressed() -> void:
@@ -197,8 +218,8 @@ func _make_result_label(font_size: int, use_display: bool) -> Label:
 func _make_button(text: String) -> Button:
 	var button := Button.new()
 	button.text = text
-	button.custom_minimum_size = Vector2(220, 54)
-	button.add_theme_font_size_override("font_size", 22)
+	button.custom_minimum_size = Vector2(240, 62)
+	button.add_theme_font_size_override("font_size", 28)
 	button.add_theme_color_override("font_color", Color(0.93, 0.91, 0.84, 1.0))
 	button.add_theme_stylebox_override("normal", _make_button_style(Color(0.09, 0.10, 0.10, 0.95), Color(0.42, 0.38, 0.32, 0.9)))
 	button.add_theme_stylebox_override("hover", _make_button_style(Color(0.13, 0.14, 0.14, 0.98), Color(0.52, 0.2, 0.16, 0.95)))
@@ -245,6 +266,59 @@ func _apply_ui_font(control: Control) -> void:
 		control.add_theme_font_override("font", ui_font)
 
 
+func _is_mobile_portrait() -> bool:
+	var viewport_size: Vector2 = get_viewport_rect().size
+	return viewport_size.x < 800 and viewport_size.y > viewport_size.x
+
+
+func _apply_orientation_guard() -> void:
+	if content_center:
+		content_center.custom_minimum_size = get_viewport_rect().size
+	var portrait: bool = _is_mobile_portrait()
+	if content_root:
+		content_root.visible = not portrait
+	if rotate_prompt:
+		rotate_prompt.visible = portrait
+
+
+func _add_rotate_prompt() -> void:
+	rotate_prompt = CenterContainer.new()
+	rotate_prompt.set_anchors_preset(Control.PRESET_FULL_RECT, true)
+	rotate_prompt.visible = false
+	add_child(rotate_prompt)
+
+	var panel := PanelContainer.new()
+	panel.custom_minimum_size = Vector2(460, 210)
+	panel.add_theme_stylebox_override("panel", _make_rotate_prompt_style())
+	rotate_prompt.add_child(panel)
+
+	var layout := VBoxContainer.new()
+	layout.alignment = BoxContainer.ALIGNMENT_CENTER
+	layout.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	layout.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	layout.add_theme_constant_override("separation", 12)
+	panel.add_child(layout)
+
+	var title := Label.new()
+	title.text = "Please rotate your device"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	title.add_theme_font_size_override("font_size", 30)
+	title.add_theme_color_override("font_color", Color(0.95, 0.93, 0.86, 1.0))
+	_apply_display_font(title)
+	layout.add_child(title)
+
+	var body := Label.new()
+	body.text = "This game is designed for landscape play."
+	body.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	body.add_theme_font_size_override("font_size", 18)
+	body.add_theme_color_override("font_color", Color(0.84, 0.84, 0.8, 0.96))
+	_apply_ui_font(body)
+	layout.add_child(body)
+
+
 func _make_card_style() -> StyleBoxFlat:
 	var style := StyleBoxFlat.new()
 	style.bg_color = Color(0.025, 0.03, 0.028, 0.82)
@@ -281,6 +355,19 @@ func _make_button_style(bg: Color, border: Color) -> StyleBoxFlat:
 	style.content_margin_top = 8
 	style.content_margin_right = 12
 	style.content_margin_bottom = 8
+	return style
+
+
+func _make_rotate_prompt_style() -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.025, 0.03, 0.028, 0.9)
+	style.border_color = Color(0.42, 0.18, 0.14, 0.92)
+	style.set_border_width_all(3)
+	style.set_corner_radius_all(8)
+	style.content_margin_left = 28
+	style.content_margin_top = 24
+	style.content_margin_right = 28
+	style.content_margin_bottom = 24
 	return style
 
 

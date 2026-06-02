@@ -46,6 +46,13 @@ var p2_used_label: Label
 var current_turn_value_label: Label
 var multiplayer_rolls_label: Label
 var main_content_center: CenterContainer
+var screen_margin: MarginContainer
+var root_layout: VBoxContainer
+var hud_panel: PanelContainer
+var dice_tray: PanelContainer
+var score_area: HBoxContainer
+var local_score_scroll: ScrollContainer
+var rotate_prompt: Control
 var game_over_label: Label
 var roll_button: Button
 var new_game_button: Button
@@ -84,7 +91,8 @@ func _ready() -> void:
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_RESIZED:
-		_update_main_content_center_size()
+		_apply_landscape_layout()
+		_apply_orientation_guard()
 
 
 func _build_ui() -> void:
@@ -111,7 +119,7 @@ func _build_ui() -> void:
 	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(bg)
 
-	var screen_margin := MarginContainer.new()
+	screen_margin = MarginContainer.new()
 	screen_margin.set_anchors_preset(Control.PRESET_FULL_RECT, true)
 	screen_margin.offset_left = 56
 	screen_margin.offset_top = 34
@@ -131,7 +139,7 @@ func _build_ui() -> void:
 	main_content_center.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.add_child(main_content_center)
 
-	var root_layout := VBoxContainer.new()
+	root_layout = VBoxContainer.new()
 	root_layout.custom_minimum_size = Vector2(1020, 0)
 	root_layout.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	root_layout.size_flags_vertical = Control.SIZE_SHRINK_CENTER
@@ -139,7 +147,7 @@ func _build_ui() -> void:
 	main_content_center.add_child(root_layout)
 	_update_main_content_center_size()
 
-	var hud_panel := PanelContainer.new()
+	hud_panel = PanelContainer.new()
 	hud_panel.custom_minimum_size = Vector2(960, 0)
 	hud_panel.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	hud_panel.add_theme_stylebox_override("panel", _make_hud_panel_style())
@@ -154,7 +162,7 @@ func _build_ui() -> void:
 	title_label.text = "快艇骰子"
 	title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	title_label.add_theme_font_size_override("font_size", 58)
+	title_label.add_theme_font_size_override("font_size", _readable_font_size(60, 48))
 	_apply_display_font(title_label)
 	title_label.add_theme_color_override("font_color", Color(0.78, 0.72, 0.63, 1.0))
 	hud_layout.add_child(title_label)
@@ -193,7 +201,7 @@ func _build_ui() -> void:
 	info_label = Label.new()
 	info_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	info_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	info_label.add_theme_font_size_override("font_size", 26)
+	info_label.add_theme_font_size_override("font_size", _readable_font_size(28, 22))
 	_apply_ui_font(info_label)
 	info_label.add_theme_color_override("font_color", Color(0.88, 0.87, 0.83, 1.0))
 	info_label.visible = false
@@ -202,13 +210,13 @@ func _build_ui() -> void:
 	rolls_left_label = Label.new()
 	rolls_left_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	rolls_left_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	rolls_left_label.add_theme_font_size_override("font_size", 26)
+	rolls_left_label.add_theme_font_size_override("font_size", _readable_font_size(28, 22))
 	_apply_ui_font(rolls_left_label)
 	rolls_left_label.add_theme_color_override("font_color", Color(0.62, 0.76, 0.55, 1.0))
 	rolls_left_label.visible = false
 	hud_layout.add_child(rolls_left_label)
 
-	var dice_tray := PanelContainer.new()
+	dice_tray = PanelContainer.new()
 	dice_tray.custom_minimum_size = Vector2(860, 0)
 	dice_tray.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	dice_tray.add_theme_stylebox_override("panel", _make_dice_panel_style())
@@ -279,7 +287,7 @@ func _build_ui() -> void:
 	roll_button = Button.new()
 	roll_button.text = "ROLL"
 	roll_button.custom_minimum_size = Vector2(380, 62)
-	roll_button.add_theme_font_size_override("font_size", 30)
+	roll_button.add_theme_font_size_override("font_size", _readable_font_size(36, 28))
 	_apply_display_font(roll_button)
 	roll_button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	_apply_roll_button_style()
@@ -292,7 +300,7 @@ func _build_ui() -> void:
 	single_score_panel.add_theme_stylebox_override("panel", _make_score_panel_style())
 	root_layout.add_child(single_score_panel)
 
-	var score_area := HBoxContainer.new()
+	score_area = HBoxContainer.new()
 	score_area.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	score_area.add_theme_constant_override("separation", 18)
 	single_score_panel.add_child(score_area)
@@ -312,14 +320,14 @@ func _build_ui() -> void:
 	upper_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	upper_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	upper_label.add_theme_color_override("font_color", Color(0.9, 0.88, 0.84, 1.0))
-	upper_label.add_theme_font_size_override("font_size", 24)
+	upper_label.add_theme_font_size_override("font_size", _readable_font_size(32, 26))
 	_apply_display_font(upper_label)
 	upper_layout.add_child(upper_label)
 
 	for category in UPPER_CATEGORIES:
 		var upper_button := Button.new()
-		upper_button.custom_minimum_size = Vector2(360, 50)
-		upper_button.add_theme_font_size_override("font_size", 21)
+		upper_button.custom_minimum_size = Vector2(360, 56)
+		upper_button.add_theme_font_size_override("font_size", _readable_font_size(26, 22))
 		_apply_ui_font(upper_button)
 		upper_button.pressed.connect(_on_category_pressed.bind(category))
 		category_buttons[category] = upper_button
@@ -340,14 +348,14 @@ func _build_ui() -> void:
 	lower_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	lower_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	lower_label.add_theme_color_override("font_color", Color(0.9, 0.88, 0.84, 1.0))
-	lower_label.add_theme_font_size_override("font_size", 24)
+	lower_label.add_theme_font_size_override("font_size", _readable_font_size(32, 26))
 	_apply_display_font(lower_label)
 	lower_layout.add_child(lower_label)
 
 	for category in LOWER_CATEGORIES:
 		var lower_button := Button.new()
-		lower_button.custom_minimum_size = Vector2(360, 50)
-		lower_button.add_theme_font_size_override("font_size", 21)
+		lower_button.custom_minimum_size = Vector2(360, 56)
+		lower_button.add_theme_font_size_override("font_size", _readable_font_size(26, 22))
 		_apply_ui_font(lower_button)
 		lower_button.pressed.connect(_on_category_pressed.bind(category))
 		category_buttons[category] = lower_button
@@ -365,7 +373,12 @@ func _build_ui() -> void:
 	table_layout.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	table_layout.add_theme_constant_override("h_separation", 10)
 	table_layout.add_theme_constant_override("v_separation", 8)
-	local_score_panel.add_child(table_layout)
+	local_score_scroll = ScrollContainer.new()
+	local_score_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	local_score_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	local_score_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	local_score_panel.add_child(local_score_scroll)
+	local_score_scroll.add_child(table_layout)
 
 	_add_table_header(table_layout, "Category")
 	_add_table_header(table_layout, "Player 1")
@@ -374,17 +387,17 @@ func _build_ui() -> void:
 	for category in CATEGORIES:
 		var category_label := Label.new()
 		category_label.text = category
-		category_label.custom_minimum_size = Vector2(300, 46)
+		category_label.custom_minimum_size = Vector2(300, 50)
 		category_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		category_label.add_theme_font_size_override("font_size", 20)
+		category_label.add_theme_font_size_override("font_size", _readable_font_size(22, 20))
 		category_label.add_theme_color_override("font_color", Color(0.9, 0.88, 0.82, 1.0))
 		_apply_ui_font(category_label)
 		table_layout.add_child(category_label)
 
 		for player_index in range(2):
 			var cell_button := Button.new()
-			cell_button.custom_minimum_size = Vector2(280, 46)
-			cell_button.add_theme_font_size_override("font_size", 20)
+			cell_button.custom_minimum_size = Vector2(280, 50)
+			cell_button.add_theme_font_size_override("font_size", _readable_font_size(24, 21))
 			_apply_ui_font(cell_button)
 			cell_button.pressed.connect(_on_local_category_pressed.bind(category, player_index))
 			local_player_buttons[player_index][category] = cell_button
@@ -398,8 +411,8 @@ func _build_ui() -> void:
 
 	new_game_button = Button.new()
 	new_game_button.text = "New Game"
-	new_game_button.custom_minimum_size = Vector2(220, 48)
-	new_game_button.add_theme_font_size_override("font_size", 22)
+	new_game_button.custom_minimum_size = Vector2(230, 54)
+	new_game_button.add_theme_font_size_override("font_size", _readable_font_size(27, 23))
 	_apply_ui_font(new_game_button)
 	new_game_button.add_theme_color_override("font_color", Color(0.93, 0.91, 0.84, 1.0))
 	new_game_button.add_theme_stylebox_override("normal", _make_std_button_style(Color(0.09, 0.10, 0.10, 0.95), Color(0.42, 0.38, 0.32, 0.9)))
@@ -410,8 +423,8 @@ func _build_ui() -> void:
 
 	back_button = Button.new()
 	back_button.text = "Back to Menu"
-	back_button.custom_minimum_size = Vector2(220, 48)
-	back_button.add_theme_font_size_override("font_size", 22)
+	back_button.custom_minimum_size = Vector2(230, 54)
+	back_button.add_theme_font_size_override("font_size", _readable_font_size(27, 23))
 	_apply_ui_font(back_button)
 	back_button.add_theme_color_override("font_color", Color(0.93, 0.91, 0.84, 1.0))
 	back_button.add_theme_stylebox_override("normal", _make_std_button_style(Color(0.09, 0.10, 0.10, 0.95), Color(0.42, 0.38, 0.32, 0.9)))
@@ -423,13 +436,16 @@ func _build_ui() -> void:
 	game_over_label = Label.new()
 	game_over_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	game_over_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	game_over_label.add_theme_font_size_override("font_size", 34)
+	game_over_label.add_theme_font_size_override("font_size", _readable_font_size(36, 30))
 	_apply_display_font(game_over_label)
 	game_over_label.add_theme_color_override("font_color", Color(0.95, 0.84, 0.80, 1.0))
 	game_over_label.visible = false
 	root_layout.add_child(game_over_label)
 
+	_add_rotate_prompt()
 	_add_crt_overlay()
+	_apply_landscape_layout()
+	_apply_orientation_guard()
 
 
 func start_new_game() -> void:
@@ -692,10 +708,118 @@ func _update_main_content_center_size() -> void:
 	if main_content_center == null:
 		return
 	var viewport_size: Vector2 = get_viewport_rect().size
-	var centered_area: Vector2 = viewport_size - Vector2(112, 68)
+	var margin_x: float = 112.0
+	var margin_y: float = 68.0
+	if viewport_size.x < 960:
+		margin_x = 24.0
+		margin_y = 20.0
+	var centered_area: Vector2 = viewport_size - Vector2(margin_x, margin_y)
 	centered_area.x = max(centered_area.x, 0.0)
 	centered_area.y = max(centered_area.y, 0.0)
 	main_content_center.custom_minimum_size = centered_area
+
+
+func _apply_landscape_layout() -> void:
+	var viewport_size: Vector2 = get_viewport_rect().size
+	var small_landscape: bool = viewport_size.x < 960 and viewport_size.x > viewport_size.y
+	var margin_x: int = 16 if small_landscape else 56
+	var margin_top: int = 14 if small_landscape else 34
+	var margin_bottom: int = 14 if small_landscape else 28
+	var content_width: float = min(1020.0, max(760.0, viewport_size.x - float(margin_x * 2)))
+
+	if screen_margin:
+		screen_margin.offset_left = margin_x
+		screen_margin.offset_top = margin_top
+		screen_margin.offset_right = -margin_x
+		screen_margin.offset_bottom = -margin_bottom
+	if root_layout:
+		root_layout.custom_minimum_size = Vector2(content_width, 0)
+		root_layout.add_theme_constant_override("separation", 8 if small_landscape else 12)
+	if hud_panel:
+		hud_panel.custom_minimum_size = Vector2(min(content_width, 960.0), 0)
+	if dice_tray:
+		dice_tray.custom_minimum_size = Vector2(min(content_width, 860.0), 0)
+	if single_score_panel:
+		single_score_panel.custom_minimum_size = Vector2(min(content_width, 980.0), 0)
+	if local_score_panel:
+		local_score_panel.custom_minimum_size = Vector2(content_width, 0)
+	if local_score_scroll:
+		local_score_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+
+	_update_main_content_center_size()
+
+
+func _is_small_landscape() -> bool:
+	var viewport_size: Vector2 = get_viewport_rect().size
+	return viewport_size.x < 960 and viewport_size.x > viewport_size.y
+
+
+func _readable_font_size(desktop_size: int, small_landscape_size: int) -> int:
+	return small_landscape_size if _is_small_landscape() else desktop_size
+
+
+func _is_mobile_portrait() -> bool:
+	var viewport_size: Vector2 = get_viewport_rect().size
+	return viewport_size.x < 800 and viewport_size.y > viewport_size.x
+
+
+func _apply_orientation_guard() -> void:
+	var portrait: bool = _is_mobile_portrait()
+	if screen_margin:
+		screen_margin.visible = not portrait
+	if rotate_prompt:
+		rotate_prompt.visible = portrait
+
+
+func _add_rotate_prompt() -> void:
+	rotate_prompt = CenterContainer.new()
+	rotate_prompt.set_anchors_preset(Control.PRESET_FULL_RECT, true)
+	rotate_prompt.visible = false
+	add_child(rotate_prompt)
+
+	var panel := PanelContainer.new()
+	panel.custom_minimum_size = Vector2(460, 210)
+	panel.add_theme_stylebox_override("panel", _make_rotate_prompt_style())
+	rotate_prompt.add_child(panel)
+
+	var layout := VBoxContainer.new()
+	layout.alignment = BoxContainer.ALIGNMENT_CENTER
+	layout.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	layout.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	layout.add_theme_constant_override("separation", 12)
+	panel.add_child(layout)
+
+	var title := Label.new()
+	title.text = "Please rotate your device"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	title.add_theme_font_size_override("font_size", 30)
+	title.add_theme_color_override("font_color", Color(0.95, 0.93, 0.86, 1.0))
+	_apply_display_font(title)
+	layout.add_child(title)
+
+	var body := Label.new()
+	body.text = "This game is designed for landscape play."
+	body.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	body.add_theme_font_size_override("font_size", 18)
+	body.add_theme_color_override("font_color", Color(0.84, 0.84, 0.8, 0.96))
+	_apply_ui_font(body)
+	layout.add_child(body)
+
+
+func _make_rotate_prompt_style() -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.025, 0.03, 0.028, 0.9)
+	style.border_color = Color(0.42, 0.18, 0.14, 0.92)
+	style.set_border_width_all(3)
+	style.set_corner_radius_all(8)
+	style.content_margin_left = 28
+	style.content_margin_top = 24
+	style.content_margin_right = 28
+	style.content_margin_bottom = 24
+	return style
 
 
 func _add_single_hud_card(parent: Control, label_text: String) -> Label:
@@ -716,13 +840,13 @@ func _add_single_hud_card(parent: Control, label_text: String) -> Label:
 	label.text = label_text
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_set_label_font_and_color(label, 18, Color(0.78, 0.72, 0.63, 1.0))
+	_set_label_font_and_color(label, _readable_font_size(20, 17), Color(0.78, 0.72, 0.63, 1.0))
 	layout.add_child(label)
 
 	var value_label := Label.new()
 	value_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	value_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_set_label_font_and_color(value_label, 30, Color(0.11, 0.78, 0.11, 1.0), true)
+	_set_label_font_and_color(value_label, _readable_font_size(38, 30), Color(0.11, 0.78, 0.11, 1.0), true)
 	layout.add_child(value_label)
 	return value_label
 
@@ -745,19 +869,19 @@ func _add_player_hud_card(parent: Control, player_name: String) -> Dictionary:
 	title.text = player_name
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_set_label_font_and_color(title, 24, Color(0.78, 0.72, 0.63, 1.0), true)
+	_set_label_font_and_color(title, _readable_font_size(30, 24), Color(0.78, 0.72, 0.63, 1.0), true)
 	layout.add_child(title)
 
 	var score_label := Label.new()
 	score_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	score_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_set_label_font_and_color(score_label, 26, Color(0.11, 0.78, 0.11, 1.0), true)
+	_set_label_font_and_color(score_label, _readable_font_size(34, 28), Color(0.11, 0.78, 0.11, 1.0), true)
 	layout.add_child(score_label)
 
 	var used_label := Label.new()
 	used_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	used_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_set_label_font_and_color(used_label, 18, Color(0.68, 0.66, 0.60, 1.0))
+	_set_label_font_and_color(used_label, _readable_font_size(22, 19), Color(0.68, 0.66, 0.60, 1.0))
 	layout.add_child(used_label)
 
 	return {"panel": card, "score": score_label, "used": used_label}
@@ -781,19 +905,19 @@ func _add_turn_hud_card(parent: Control) -> Dictionary:
 	label.text = "CURRENT TURN"
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_set_label_font_and_color(label, 18, Color(0.78, 0.72, 0.63, 1.0))
+	_set_label_font_and_color(label, _readable_font_size(20, 18), Color(0.78, 0.72, 0.63, 1.0))
 	layout.add_child(label)
 
 	var turn_label := Label.new()
 	turn_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	turn_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_set_label_font_and_color(turn_label, 32, Color(0.70, 0.20, 0.16, 1.0), true)
+	_set_label_font_and_color(turn_label, _readable_font_size(34, 28), Color(0.70, 0.20, 0.16, 1.0), true)
 	layout.add_child(turn_label)
 
 	var rolls_label := Label.new()
 	rolls_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	rolls_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_set_label_font_and_color(rolls_label, 26, Color(0.11, 0.78, 0.11, 1.0), true)
+	_set_label_font_and_color(rolls_label, _readable_font_size(30, 26), Color(0.11, 0.78, 0.11, 1.0), true)
 	layout.add_child(rolls_label)
 
 	return {"panel": card, "turn": turn_label, "rolls": rolls_label}
@@ -919,7 +1043,7 @@ func _apply_dice_button_style(button: Button, held: bool) -> void:
 
 func _apply_category_button_style(button: Button) -> void:
 	button.add_theme_color_override("font_color", Color(0.92, 0.90, 0.84, 1.0))
-	button.add_theme_color_override("font_disabled_color", Color(0.58, 0.57, 0.52, 0.95))
+	button.add_theme_color_override("font_disabled_color", Color(0.68, 0.66, 0.60, 0.95))
 	button.add_theme_stylebox_override("normal", _make_std_button_style(Color(0.08, 0.09, 0.09, 0.94), Color(0.36, 0.34, 0.3, 0.9)))
 	button.add_theme_stylebox_override("hover", _make_std_button_style(Color(0.11, 0.12, 0.12, 0.98), Color(0.52, 0.2, 0.16, 0.95)))
 	button.add_theme_stylebox_override("pressed", _make_std_button_style(Color(0.06, 0.07, 0.07, 1.0), Color(0.36, 0.15, 0.12, 0.95)))
@@ -933,7 +1057,7 @@ func _refresh_single_score_buttons(controller) -> void:
 		if controller.state.used_categories.has(category):
 			button.text = "%s: %d (USED)" % [category, controller.state.scores[category]]
 			button.disabled = true
-			button.add_theme_color_override("font_disabled_color", Color(0.64, 0.62, 0.56, 0.95))
+			button.add_theme_color_override("font_disabled_color", Color(0.70, 0.68, 0.61, 0.98))
 			button.add_theme_stylebox_override("normal", _make_used_category_style())
 			button.add_theme_stylebox_override("disabled", _make_used_category_style())
 		else:
